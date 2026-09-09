@@ -1,0 +1,25 @@
+/**
+ * Tokens de identidad visual — Cuestionario NOM-035-STPS-2018
+ * Secretaría de Cultura y Turismo del Estado de México
+ *
+ * Paleta y tipografías confirmadas (ver sección 11 del plan de proyecto).
+ * Este archivo NO reemplaza a main.css / _variables.sass de Bee framework;
+ * se carga a un lado (ver templates/includes/styles.php) para no modificar
+ * el núcleo del framework, sólo para aportar los tokens propios del proyecto.
+ *
+ * TODO (fase de Diseño): confirmar si se requieren tokens adicionales
+ * (ej. colores de estado para niveles de riesgo: nulo/bajo/medio/alto/muy alto).
+ */
+
+:root {
+  /* Colores institucionales */
+  --color-primario: #9F2241;
+  --color-texto:    #000000;
+  --color-cafe:     #965F36;
+  --color-oro:      #BC955B;
+  --color-arena:    #DDC8A4;
+
+  /* Tipografías */
+  --font-titulos: "Gotham", "Montserrat", sans-serif;
+  --font-cuerpo:  "BW Modelica", "Inter", system-ui, sans-serif;
+}
