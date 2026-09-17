@@ -63,7 +63,10 @@ class administradorController extends Controller implements ControllerInterface
   /**
    * Alta de un nuevo centro de trabajo (RF-10)
    * TODO (fase de Desarrollo): implementar validaciones y determinar la guía
-   * automáticamente con centroTrabajoModel::determinar_guia() (RF-00)
+   * automáticamente con guiaModel::por_numero_trabajadores() (RF-00).
+   * IMPORTANTE: para 15 trabajadores o menos, ese método regresa `null` a
+   * propósito (no requiere cuestionario, no es un error) — mostrar un
+   * mensaje informativo distinto, no el genérico de "pendiente" de abajo.
    */
   function post_centros_trabajo()
   {
@@ -75,13 +78,16 @@ class administradorController extends Controller implements ControllerInterface
         throw new Exception(get_bee_message(0));
       }
 
-      if (!check_posted_data(['nombre', 'numero_trabajadores'], $_POST)) {
+      if (!check_posted_data(['nombre', 'num_trabajadores'], $_POST)) {
         throw new Exception('Por favor completa el formulario.');
       }
 
       array_map('sanitize_input', $_POST);
 
-      // TODO: determinar guia_id con centroTrabajoModel::determinar_guia((int) $_POST['numero_trabajadores'])
+      // TODO: la guía NO se guarda en centro_trabajo (ver docs/DDL/ddl.sql); se resuelve
+      // al momento con guiaModel::por_numero_trabajadores((int) $_POST['num_trabajadores']).
+      // TODO: si el resultado es null y num_trabajadores <= 15, informar "este centro
+      // de trabajo no requiere cuestionario" (RF-00) en vez de tratarlo como error.
       // TODO: centroTrabajoModel::insertOne([...]) incluyendo administrador_id = obtener_usuario_actual()['id']
       // TODO: registrar_auditoria('alta_centro_trabajo', 'centro_trabajo', $id)
 

@@ -113,10 +113,10 @@ class resultadosController extends Controller implements ControllerInterface
    */
   function individual($aplicacionId = null)
   {
-    // TODO: reemplazar por la consulta real una vez exista la tabla `aplicacion`;
-    // mientras tanto by_id() regresa [] y el acceso se deniega (falla cerrado)
-    $aplicacion = aplicacionModel::by_id($aplicacionId);
-    $this->verificarAccesoCentroTrabajo($aplicacion['centro_trabajo_id'] ?? null);
+    // `aplicacion` no tiene centro_trabajo_id propio (ver docs/DDL/ddl.sql):
+    // se resuelve vía JOIN con `token` en aplicacionModel::centro_trabajo_id_de().
+    // Falla cerrado: si la aplicación no existe, regresa null y se deniega.
+    $this->verificarAccesoCentroTrabajo(aplicacionModel::centro_trabajo_id_de($aplicacionId));
 
     // TODO: registrar_auditoria('consulta_resultado_individual', 'aplicacion', $aplicacionId) (RF-12, RNF-01)
     // TODO: $this->addToData('resultado', resultadoModel::por_aplicacion($aplicacionId));
@@ -187,8 +187,8 @@ class resultadosController extends Controller implements ControllerInterface
    */
   function pdf_individual($aplicacionId = null)
   {
-    $aplicacion = aplicacionModel::by_id($aplicacionId);
-    $this->verificarAccesoCentroTrabajo($aplicacion['centro_trabajo_id'] ?? null);
+    // Ver nota de individual() sobre aplicacionModel::centro_trabajo_id_de()
+    $this->verificarAccesoCentroTrabajo(aplicacionModel::centro_trabajo_id_de($aplicacionId));
 
     // TODO: registrar_auditoria('descarga_pdf_individual', 'aplicacion', $aplicacionId)
     // TODO:

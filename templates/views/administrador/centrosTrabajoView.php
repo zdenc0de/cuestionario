@@ -17,9 +17,12 @@
           </div>
 
           <div class="mb-3">
-            <label for="numero_trabajadores" class="form-label">Número de trabajadores <span class="text-danger">*</span></label>
-            <input type="number" class="form-control" id="numero_trabajadores" name="numero_trabajadores" min="15" required>
-            <div class="form-text">15 a 50 trabajadores aplica Guía II; más de 50, Guía III (RF-00).</div>
+            <label for="num_trabajadores" class="form-label">Número de trabajadores <span class="text-danger">*</span></label>
+            <!-- name="num_trabajadores": debe coincidir con la columna real en docs/DDL/ddl.sql -->
+            <!-- min="1" (no 16): un centro de 15 trabajadores o menos es un caso válido,
+                 sólo que no requiere cuestionario (RF-00) — no debe bloquearse en el formulario -->
+            <input type="number" class="form-control" id="num_trabajadores" name="num_trabajadores" min="1" required>
+            <div class="form-text">16 a 50 trabajadores aplica Guía II; más de 50, Guía III; 15 o menos no requiere cuestionario (RF-00).</div>
           </div>
 
           <button class="btn btn-success btn-lg w-100" type="submit">Agregar</button>
