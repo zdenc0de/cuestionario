@@ -1,7 +1,7 @@
 <?php
 /**
  * Plantilla general de modelos
- * @version 1.0.0
+ * @version 1.1.0
  *
  * Modelo de guia
  *
@@ -9,7 +9,19 @@
  * reactivos). Es la entidad que permite soportar ambas guías sin duplicar
  * código (nombre, número de reactivos, rango de trabajadores, umbrales).
  *
+ * Los umbrales de calificación NO se guardan aquí como JSON: viven
+ * normalizados en la tabla `umbral` (ver umbralModel — pendiente de
+ * scaffolding) con una fila por (guia_id, nivel_agregacion, categoria_id|
+ * dominio_id, nivel_riesgo). Ver docs/DDL/ddl.sql.
+ *
+ * RF-00 — CONFIRMADO contra el texto oficial de la norma (campo de
+ * aplicación): 16 a 50 trabajadores -> Guía II; más de 50 -> Guía III;
+ * 15 trabajadores o menos -> el centro tiene obligaciones ligeras y NO
+ * requiere aplicar ningún cuestionario. Ver por_numero_trabajadores().
+ *
  * @see docs/ARQUITECTURA.md sección "Modelo de datos"
+ * @see docs/DDL/ddl.sql
+ * @see docs/norma/Transcripcion_GuiaIII_NOM-035.md sección 3 (umbrales de la Guía III)
  */
 class guiaModel extends Model {
   /**
@@ -17,17 +29,13 @@ class guiaModel extends Model {
   */
   public static $t1 = 'guia';
 
-  // Esquema del Modelo
-  // TODO (fase de Diseño): transcribir de las tablas oficiales de la norma (Secretaría las tiene en físico)
-  // id                    INT PK AUTO_INCREMENT
-  // nombre                VARCHAR(50)   -- 'Guía II' | 'Guía III'
-  // numero_reactivos      INT           -- 46 | 72
-  // min_trabajadores      INT           -- 15
-  // max_trabajadores      INT NULL      -- 50 (NULL = sin límite superior para Guía III)
-  // umbrales_json         TEXT/JSON     -- TODO: tabla de rangos de calificación final por nivel de riesgo (nulo/bajo/medio/alto/muy alto)
-  // umbrales_dominio_json TEXT/JSON     -- TODO: rangos de calificación por dominio
-  // umbrales_categoria_json TEXT/JSON   -- TODO: rangos de calificación por categoría
-  // creado                DATETIME
+  // Esquema del Modelo (según docs/DDL/ddl.sql)
+  // id                INT PK AUTO_INCREMENT
+  // clave             VARCHAR(10)   UNIQUE  -- 'GRII' | 'GRIII'
+  // nombre            VARCHAR(150)
+  // num_reactivos     SMALLINT UNSIGNED     -- 46 | 72
+  // trabajadores_min  INT UNSIGNED          -- 16 (GRII), CONFIRMADO contra el texto oficial de la norma
+  // trabajadores_max  INT UNSIGNED NULL     -- 50 (GRII) / NULL (GRIII, sin límite superior)
 
   function __construct()
   {
@@ -54,33 +62,62 @@ class guiaModel extends Model {
   }
 
   /**
+   * Busca una guía por su clave corta ('GRII' | 'GRIII')
+   *
+   * @param string $clave
+   * @return array|null
+   */
+  static function by_clave(string $clave)
+  {
+    $sql = sprintf('SELECT * FROM %s WHERE clave = :clave LIMIT 1', self::$t1);
+    return ($rows = parent::query($sql, ['clave' => $clave])) ? $rows[0] : null;
+  }
+
+  /**
    * Regresa la guía correspondiente según el número de trabajadores del
-   * centro de trabajo (RF-00)
-   * TODO (fase de Diseño): confirmar límites exactos contra la norma
+   * centro de trabajo (RF-00). Es la ÚNICA fuente de verdad para esta regla
+   * (no duplicar el rango en otro lugar del código, ver nota en
+   * centroTrabajoModel::determinar_guia(), pendiente de consolidar aquí).
+   *
+   * IMPORTANTE: para $numeroTrabajadores <= 15 este método regresa `null` A
+   * PROPÓSITO — no es un error ni un caso sin resolver. Un centro de trabajo
+   * de 15 trabajadores o menos tiene obligaciones ligeras según la norma y
+   * NO requiere aplicar ningún cuestionario (ni Guía II ni III). TODO (fase
+   * de Desarrollo): en el controlador que consuma este método (ej.
+   * administradorController::post_centros_trabajo()), un resultado `null`
+   * debe mostrarse como "este centro de trabajo no requiere cuestionario",
+   * nunca como un mensaje de error genérico.
    *
    * @param int $numeroTrabajadores
-   * @return array|null
+   * @return array|null null si no aplica ninguna guía (<=15 trabajadores)
    */
   static function por_numero_trabajadores(int $numeroTrabajadores)
   {
     $sql = sprintf(
-      'SELECT * FROM %s WHERE :n >= min_trabajadores AND (max_trabajadores IS NULL OR :n2 <= max_trabajadores) LIMIT 1',
+      'SELECT * FROM %s WHERE :n >= trabajadores_min AND (trabajadores_max IS NULL OR :n2 <= trabajadores_max) LIMIT 1',
       self::$t1
     );
     return ($rows = parent::query($sql, ['n' => $numeroTrabajadores, 'n2' => $numeroTrabajadores])) ? $rows[0] : null;
   }
 
   /**
-   * Regresa el nivel de riesgo correspondiente a una calificación final
-   * TODO (fase de Diseño): implementar con los umbrales oficiales (umbrales_json)
+   * Regresa el nivel de riesgo correspondiente a una calificación, contra la
+   * tabla `umbral` (ver umbralModel — pendiente de scaffolding).
+   * TODO (fase de Desarrollo): implementar con umbralModel::nivel_para()
+   * una vez exista ese modelo.
    *
    * @param mixed $guiaId
-   * @param float $calificacionFinal
-   * @return string 'nulo'|'bajo'|'medio'|'alto'|'muy_alto'
+   * @param int $calificacion
+   * @param string $nivelAgregacion 'final' | 'categoria' | 'dominio'
+   * @param mixed $categoriaODominioId NULL si $nivelAgregacion = 'final'
+   * @return string|null 'nulo'|'bajo'|'medio'|'alto'|'muy_alto'
    */
-  static function nivel_de_riesgo($guiaId, float $calificacionFinal)
+  static function nivel_de_riesgo($guiaId, int $calificacion, string $nivelAgregacion = 'final', $categoriaODominioId = null)
   {
-    // TODO: cargar umbrales_json de la guía y comparar $calificacionFinal contra los rangos
+    // TODO: SELECT nivel_riesgo FROM umbral WHERE guia_id = :guia_id AND nivel_agregacion = :nivel
+    //       AND (categoria_id = :id OR dominio_id = :id OR (:nivel = 'final'))
+    //       AND (limite_inferior IS NULL OR :calificacion >= limite_inferior)
+    //       AND (limite_superior IS NULL OR :calificacion < limite_superior)
     return null;
   }
 

@@ -1,7 +1,7 @@
 <?php
 /**
  * Plantilla general de modelos
- * @version 1.0.0
+ * @version 1.1.0
  *
  * Modelo de auditoria (bitácora)
  *
@@ -10,6 +10,7 @@
  * (RF-09, RF-12, RNF-01).
  *
  * @see docs/ARQUITECTURA.md sección "Modelo de datos"
+ * @see docs/DDL/ddl.sql
  * @see registrar_auditoria() en app/functions/bee_custom_functions.php
  */
 class auditoriaModel extends Model {
@@ -18,17 +19,15 @@ class auditoriaModel extends Model {
   */
   public static $t1 = 'auditoria';
 
-  // Esquema del Modelo
-  // TODO (fase de Diseño): confirmar catálogo cerrado de acciones a auditar
-  // (ej. 'login', 'consulta_resultados', 'generar_token', 'alta_centro_trabajo', 'alta_administrador', etc.)
-  // id          INT PK AUTO_INCREMENT
-  // usuario_id  INT FK -> usuario.id
-  // accion      VARCHAR(100)
-  // entidad     VARCHAR(100)  NULL  -- ej. 'centro_trabajo', 'token', 'resultado'
-  // entidad_id  INT           NULL
-  // detalle     VARCHAR(255)  NULL
-  // ip          VARCHAR(45)   NULL
-  // creado      DATETIME
+  // Esquema del Modelo (según docs/DDL/ddl.sql)
+  // id         INT PK AUTO_INCREMENT
+  // usuario_id INT FK -> usuario.id  NOT NULL
+  // accion     VARCHAR(100) NOT NULL
+  // entidad    VARCHAR(100) NOT NULL  -- ej. 'centro_trabajo', 'token', 'resultado'
+  // entidad_id INT NULL
+  // detalle    TEXT NULL
+  // ip         VARCHAR(45) NULL  -- IPv4/IPv6, trazabilidad forense (RNF-01, agregada 2026-09-17)
+  // created_at TIMESTAMP  -- DEFAULT CURRENT_TIMESTAMP, no es necesario enviarlo al insertar
 
   function __construct()
   {

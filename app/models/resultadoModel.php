@@ -1,14 +1,19 @@
 <?php
 /**
  * Plantilla general de modelos
- * @version 1.0.0
+ * @version 1.2.0
  *
  * Modelo de resultado
  *
- * Calificación final, nivel de riesgo y desglose por dominio y categoría de
- * cada aplicación (RF-06, RF-07). Base de los reportes individual y agregado.
+ * Calificación final y nivel de riesgo de cada aplicación (RF-06, RF-07).
+ * Base de los reportes individual y agregado. El desglose por dominio y por
+ * categoría NO vive aquí como JSON: está normalizado en la tabla hija
+ * `resultado_detalle` (ver resultadoDetalleModel — pendiente de scaffolding),
+ * una fila por cada (categoria|dominio) calculado.
  *
  * @see docs/ARQUITECTURA.md sección "Modelo de datos"
+ * @see docs/DDL/ddl.sql
+ * @see docs/norma/Transcripcion_GuiaIII_NOM-035.md sección 3 (umbrales de la Guía III)
  */
 class resultadoModel extends Model {
   /**
@@ -16,16 +21,12 @@ class resultadoModel extends Model {
   */
   public static $t1 = 'resultado';
 
-  // Esquema del Modelo
-  // TODO (fase de Diseño): confirmar estructura de los desgloses (JSON vs tablas normalizadas
-  // resultado_dominio / resultado_categoria) al transcribir las tablas oficiales de puntaje
-  // id                       INT PK AUTO_INCREMENT
-  // aplicacion_id            INT FK -> aplicacion.id
-  // calificacion_final       DECIMAL(6,2)
-  // nivel_riesgo             ENUM('nulo','bajo','medio','alto','muy_alto')  -- ver guiaModel::nivel_de_riesgo()
-  // desglose_dominio_json    TEXT/JSON   -- TODO: puntaje por cada uno de los 10 dominios (GRIII) / dominios de GRII
-  // desglose_categoria_json  TEXT/JSON   -- TODO: puntaje por cada una de las 5 categorías
-  // calculado_en             DATETIME
+  // Esquema del Modelo (según docs/DDL/ddl.sql)
+  // id                 INT PK AUTO_INCREMENT
+  // aplicacion_id       INT FK -> aplicacion.id  UNIQUE
+  // calificacion_final  INT UNSIGNED   -- entero, no decimal (los umbrales de la norma son enteros)
+  // nivel_riesgo        ENUM('nulo','bajo','medio','alto','muy_alto')
+  // fecha_calculo        TIMESTAMP
 
   function __construct()
   {
@@ -57,23 +58,31 @@ class resultadoModel extends Model {
   }
 
   /**
-   * Regresa todos los resultados de un centro de trabajo, para el resultado agregado (RF-13)
+   * Regresa todos los resultados de un centro de trabajo, para el resultado
+   * agregado (RF-13). Hace doble JOIN (aplicacion -> token) porque ni
+   * `resultado` ni `aplicacion` tienen centro_trabajo_id propio.
    *
    * @param mixed $centroTrabajoId
    * @return array
    */
   static function agregado_por_centro_trabajo($centroTrabajoId)
   {
-    // TODO: hacer JOIN con aplicacion para filtrar por centro_trabajo_id
-    $sql = 'SELECT r.* FROM %s r INNER JOIN aplicacion a ON a.id = r.aplicacion_id WHERE a.centro_trabajo_id = :centro_trabajo_id';
+    $sql =
+      'SELECT r.* FROM %s r
+       INNER JOIN aplicacion a ON a.id = r.aplicacion_id
+       INNER JOIN token t ON t.id = a.token_id
+       WHERE t.centro_trabajo_id = :centro_trabajo_id';
     $sql = sprintf($sql, self::$t1);
     return ($rows = parent::query($sql, ['centro_trabajo_id' => $centroTrabajoId])) ? $rows : [];
   }
 
   /**
-   * Calcula y persiste el resultado de una aplicación a partir de sus respuestas (RF-05, RF-06, RF-07)
-   * TODO (fase de Diseño): implementar el cálculo real con las tablas de puntaje oficiales
-   * (mapeo reactivo -> dominio -> categoría, polaridad y umbrales de guiaModel)
+   * Calcula y persiste el resultado de una aplicación a partir de sus
+   * respuestas (RF-05, RF-06, RF-07), incluyendo el desglose en
+   * `resultado_detalle` (ver resultadoDetalleModel — pendiente de scaffolding).
+   * TODO (fase de Desarrollo): implementar el cálculo real con las tablas de
+   * puntaje oficiales (reactivo.polaridad + opcion_respuesta.posicion, ver
+   * reactivoModel::calcular_puntaje(), y los umbrales de la tabla `umbral`).
    *
    * @param mixed $aplicacionId
    * @return array|null El resultado calculado
@@ -81,11 +90,11 @@ class resultadoModel extends Model {
   static function calcular_para_aplicacion($aplicacionId)
   {
     // TODO:
-    // 1. Obtener respuestas con respuestaModel::por_aplicacion($aplicacionId)
-    // 2. Agrupar por dominio y categoría usando reactivoModel
-    // 3. Sumar puntajes respetando polaridad (RF-05)
-    // 4. Determinar nivel de riesgo con guiaModel::nivel_de_riesgo()
-    // 5. Persistir con self::insertOne()
+    // 1. Obtener respuestas con respuestaModel::por_aplicacion($aplicacionId) (join a reactivo + opcion_respuesta)
+    // 2. Calcular el puntaje de cada respuesta con reactivoModel::calcular_puntaje()
+    // 3. Agrupar y sumar por dominio_id y categoria_id (denormalizados en reactivo)
+    // 4. Determinar nivel de riesgo con guiaModel::nivel_de_riesgo() (vía tabla `umbral`)
+    // 5. Persistir el total con self::insertOne() y el desglose con resultadoDetalleModel::insertOne() por cada dominio/categoria
     return null;
   }
 

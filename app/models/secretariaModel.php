@@ -1,7 +1,7 @@
 <?php
 /**
  * Plantilla general de modelos
- * @version 1.0.0
+ * @version 1.1.0
  *
  * Modelo de secretaria
  *
@@ -10,6 +10,7 @@
  * cuenta con un súper usuario que administra a sus administradores.
  *
  * @see docs/ARQUITECTURA.md
+ * @see docs/DDL/ddl.sql
  */
 class secretariaModel extends Model {
   /**
@@ -17,13 +18,15 @@ class secretariaModel extends Model {
   */
   public static $t1 = 'secretaria';
 
-  // Esquema del Modelo
-  // TODO (fase de Diseño): confirmar columnas finales (logo, siglas, colores institucionales si aplican por dependencia)
-  // id               INT PK AUTO_INCREMENT
-  // nombre           VARCHAR(150)  -- ej. "Secretaría de Cultura y Turismo"
-  // siglas           VARCHAR(20)   NULL
-  // logo             VARCHAR(255)  NULL
-  // creado           DATETIME
+  // Esquema del Modelo (según docs/DDL/ddl.sql)
+  // id         INT PK AUTO_INCREMENT
+  // nombre     VARCHAR(200)  -- ej. "Secretaría de Cultura y Turismo"
+  // created_at TIMESTAMP
+  // updated_at TIMESTAMP
+  // TODO (fase de Diseño): considerar una columna `logo` más adelante — el proyecto
+  // trata sobre la identidad de la Secretaría (logo en encabezado y en los reportes
+  // PDF/Excel, ver resultadosController). No urge; no está en el DDL actual, y si se
+  // agrega debe ir primero en docs/DDL/ddl.sql.
 
   function __construct()
   {

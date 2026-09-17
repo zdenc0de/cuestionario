@@ -1,13 +1,21 @@
 <?php
 /**
  * Plantilla general de modelos
- * @version 1.0.0
+ * @version 1.1.0
  *
  * Modelo de respuesta
  *
- * El valor elegido por el encuestado para cada reactivo de una aplicación.
+ * La opción elegida por el encuestado para cada reactivo de una aplicación.
+ *
+ * AJUSTE contra docs/DDL/ddl.sql: esta tabla NO guarda un puntaje (`valor`)
+ * ya calculado — sólo guarda qué opción se eligió (opcion_respuesta_id). El
+ * puntaje se deriva en el momento con reactivoModel::calcular_puntaje()
+ * (reactivo.polaridad + opcion_respuesta.posicion), no se persiste aquí.
+ * Ver docs/ARQUITECTURA.md si se decide agregar una columna denormalizada
+ * para optimizar reportes.
  *
  * @see docs/ARQUITECTURA.md sección "Modelo de datos"
+ * @see docs/DDL/ddl.sql
  */
 class respuestaModel extends Model {
   /**
@@ -15,15 +23,12 @@ class respuestaModel extends Model {
   */
   public static $t1 = 'respuesta';
 
-  // Esquema del Modelo
-  // TODO (fase de Diseño): confirmar si "valor" se guarda ya normalizado según polaridad (RF-05)
-  // o se calcula al vuelo en resultadoModel a partir de opcion_respuesta.valor + reactivo.polaridad
+  // Esquema del Modelo (según docs/DDL/ddl.sql)
   // id                  INT PK AUTO_INCREMENT
   // aplicacion_id       INT FK -> aplicacion.id
   // reactivo_id         INT FK -> reactivo.id
   // opcion_respuesta_id INT FK -> opcion_respuesta.id
-  // valor               TINYINT  -- valor final considerando polaridad
-  // creado              DATETIME
+  // UNIQUE (aplicacion_id, reactivo_id)
 
   function __construct()
   {
@@ -61,14 +66,26 @@ class respuestaModel extends Model {
   }
 
   /**
-   * Regresa todas las respuestas de una aplicación (para calcular resultado)
+   * Regresa todas las respuestas de una aplicación, con el dato del reactivo
+   * (polaridad, dominio_id, categoria_id) y de la opción elegida (posicion)
+   * ya incluidos vía JOIN — insumo directo para
+   * resultadoModel::calcular_para_aplicacion().
    *
    * @param mixed $aplicacionId
    * @return array
    */
   static function por_aplicacion($aplicacionId)
   {
-    $sql = sprintf('SELECT * FROM %s WHERE aplicacion_id = :aplicacion_id', self::$t1);
+    $sql =
+      'SELECT
+        r.*,
+        rc.polaridad, rc.dominio_id, rc.categoria_id,
+        op.posicion
+       FROM %s r
+       INNER JOIN reactivo rc         ON rc.id = r.reactivo_id
+       INNER JOIN opcion_respuesta op ON op.id = r.opcion_respuesta_id
+       WHERE r.aplicacion_id = :aplicacion_id';
+    $sql = sprintf($sql, self::$t1);
     return ($rows = parent::query($sql, ['aplicacion_id' => $aplicacionId])) ? $rows : [];
   }
 

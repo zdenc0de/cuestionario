@@ -1,7 +1,7 @@
 <?php
 /**
  * Plantilla general de modelos
- * @version 1.1.0
+ * @version 1.2.0
  *
  * Modelo de usuario
  *
@@ -9,12 +9,13 @@
  * "Decisiones de diseño — A. Autenticación/roles"): el sistema NATIVO de Bee
  * (tabla bee_users + clase Auth) es la ÚNICA fuente de verdad de
  * identidad/login. usuarioModel **NO duplica usuarios**: es una tabla de
- * ENLACE (1 a 1 con bee_users) que agrega el contexto que Bee no modela de
- * forma nativa entre un usuario y una secretaría/centro de trabajo:
+ * ENLACE (1 a 1 con bee_users) que agrega el rol de contexto y su secretaría.
  *
- *   - rol de contexto: 'superusuario' | 'administrador'
- *   - secretaria_id: obligatorio para 'superusuario'
- *   - centro_trabajo_id: obligatorio para 'administrador'
+ * AJUSTE contra docs/DDL/ddl.sql: la relación con centro de trabajo NO es una
+ * columna en `usuario` (a diferencia de una primera versión de este
+ * docblock). Es al revés: `centro_trabajo.administrador_id` apunta a
+ * `usuario.id`. Esto permite que UN administrador gestione VARIOS centros de
+ * trabajo (1 a muchos), no sólo uno — ver centroTrabajoModel::por_administrador().
  *
  * (No se usa bee_roles/bee_permisos para este gate porque esas tablas
  * modelan roles y permisos granulares genéricos sin columna de enlace a
@@ -25,6 +26,7 @@
  * administradorController y superusuarioController.
  *
  * @see docs/ARQUITECTURA.md
+ * @see docs/DDL/ddl.sql
  */
 class usuarioModel extends Model {
   /**
@@ -35,14 +37,18 @@ class usuarioModel extends Model {
   // Nombre de tablas relacionadas (núcleo de Bee, no modificar)
   // public static $t2 = 'bee_users';
 
-  // Esquema del Modelo
-  // TODO (fase de Diseño): confirmar columnas finales
-  // id                INT PK AUTO_INCREMENT
-  // bee_user_id       INT FK -> bee_users.id  UNIQUE (relación 1 a 1, ver docblock de la clase)
-  // rol               ENUM('superusuario','administrador')
-  // secretaria_id     INT FK -> secretaria.id     NULL (obligatorio si rol = 'superusuario')
-  // centro_trabajo_id INT FK -> centro_trabajo.id NULL (obligatorio si rol = 'administrador')
-  // creado            DATETIME
+  // Esquema del Modelo (según docs/DDL/ddl.sql)
+  // id            INT PK AUTO_INCREMENT
+  // bee_user_id   INT FK -> bee_users.id  UNIQUE (relación 1 a 1, ver docblock de la clase)
+  // rol           ENUM('superusuario','administrador')
+  // secretaria_id INT FK -> secretaria.id  NOT NULL (obligatorio para ambos roles, ver docblock)
+  // created_at    TIMESTAMP
+  // updated_at    TIMESTAMP
+  //
+  // NOTA de tipos: docs/DDL/ddl.sql declara `bee_user_id` como INT UNSIGNED,
+  // pero el núcleo de Bee (db_beeframework.sql) declara `bee_users.id` como
+  // INT (firmado, sin UNSIGNED) — la FK del Bloque C del DDL fallará por
+  // choque de signo hasta que se corrija en el DDL (ver docs/ARQUITECTURA.md).
 
   function __construct()
   {

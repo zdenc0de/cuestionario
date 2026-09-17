@@ -1,7 +1,7 @@
 <?php
 /**
  * Plantilla general de modelos
- * @version 1.1.0
+ * @version 1.2.0
  *
  * Modelo de token
  *
@@ -11,8 +11,9 @@
  * encuestado del centro de trabajo puede capturarlo para acceder (RF-10,
  * RF-11). Lo que distingue a cada encuestado es su identidad declarada
  * (nombre + numero_servidor_publico, capturada en aplicacionModel), no el
- * token en sí. La guía a aplicar NO se guarda en el token: se obtiene de
- * centro_trabajo.guia_id (evita duplicar el dato).
+ * token en sí. La guía a aplicar NO se guarda en el token (ver docs/DDL/ddl.sql:
+ * `centro_trabajo` tampoco la guarda; se determina en el momento con
+ * guiaModel::por_numero_trabajadores() y se "congela" en aplicacion.guia_id).
  *
  * "Habilitar cuestionario" (RF-10) se define, de forma provisional y sujeta a
  * validación con la Secretaría, como: crear/activar un token vigente para el
@@ -22,7 +23,13 @@
  * Restricción de negocio (aplicada en aplicacionModel, no aquí): una sola
  * aplicación por combinación (token_id, numero_servidor_publico).
  *
+ * IMPORTANTE — tipo de fecha: según docs/DDL/ddl.sql, `fecha_inicio`/`fecha_fin`
+ * son de tipo DATE (no DATETIME), es decir vigencia por DÍA completo. Por eso
+ * esta clase compara contra date('Y-m-d') y NO contra now() (que incluye hora
+ * y rompería la comparación de cadenas contra una columna DATE).
+ *
  * @see docs/ARQUITECTURA.md
+ * @see docs/DDL/ddl.sql
  */
 class tokenModel extends Model {
   /**
@@ -30,15 +37,16 @@ class tokenModel extends Model {
   */
   public static $t1 = 'token';
 
-  // Esquema del Modelo
-  // TODO (fase de Diseño): confirmar vigencia por defecto de una campaña (¿días?)
+  // Esquema del Modelo (según docs/DDL/ddl.sql)
   // id                INT PK AUTO_INCREMENT
   // centro_trabajo_id INT FK -> centro_trabajo.id
   // codigo            VARCHAR(64) UNIQUE  -- clave única generada, multiuso durante su vigencia
-  // fecha_inicio      DATETIME
-  // fecha_fin         DATETIME
-  // estado            ENUM('activo','expirado','revocado')  -- NO incluye 'usado': el token es multiuso, no se consume
-  // creado            DATETIME
+  // fecha_inicio      DATE  -- vigencia por día completo, NO DATETIME (ver docblock de la clase)
+  // fecha_fin         DATE
+  // estado            ENUM('activo','inactivo')
+  // created_at        TIMESTAMP
+  // updated_at        TIMESTAMP
+  // TODO (fase de Diseño): confirmar vigencia por defecto de una campaña (¿días?)
 
   function __construct()
   {
@@ -99,10 +107,10 @@ class tokenModel extends Model {
   static function activo_por_centro_trabajo($centroTrabajoId)
   {
     $sql = sprintf(
-      "SELECT * FROM %s WHERE centro_trabajo_id = :centro_trabajo_id AND estado = 'activo' AND :ahora BETWEEN fecha_inicio AND fecha_fin LIMIT 1",
+      "SELECT * FROM %s WHERE centro_trabajo_id = :centro_trabajo_id AND estado = 'activo' AND :hoy BETWEEN fecha_inicio AND fecha_fin LIMIT 1",
       self::$t1
     );
-    return ($rows = parent::query($sql, ['centro_trabajo_id' => $centroTrabajoId, 'ahora' => now()])) ? $rows[0] : null;
+    return ($rows = parent::query($sql, ['centro_trabajo_id' => $centroTrabajoId, 'hoy' => date('Y-m-d')])) ? $rows[0] : null;
   }
 
   /**
@@ -137,13 +145,21 @@ class tokenModel extends Model {
       return false;
     }
 
-    $ahora = now();
-    return $ahora >= $token['fecha_inicio'] && $ahora <= $token['fecha_fin'];
+    // fecha_inicio/fecha_fin son DATE: comparar solo la fecha (sin hora), ver docblock de la clase
+    $hoy = date('Y-m-d');
+    return $hoy >= $token['fecha_inicio'] && $hoy <= $token['fecha_fin'];
   }
 
+  /**
+   * Revoca un token (equivalente a inactivo, no existe un estado 'revocado'
+   * separado en docs/DDL/ddl.sql: el ENUM es sólo ('activo','inactivo'))
+   *
+   * @param mixed $id
+   * @return bool
+   */
   static function revocar($id)
   {
-    return parent::update(self::$t1, ['id' => $id], ['estado' => 'revocado']);
+    return parent::update(self::$t1, ['id' => $id], ['estado' => 'inactivo']);
   }
 
   static function update_by_id($id, $params)
