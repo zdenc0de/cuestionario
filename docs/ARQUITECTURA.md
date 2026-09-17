@@ -324,3 +324,115 @@ código):
   `adminController::borrar_usuario()`) — ver sección 7.2.
 - Elección de librería de exportación a Excel (no está en `composer.json` actual).
 - Creación de las tablas nuevas en la base de datos.
+
+---
+
+## 10. Verificación contra `docs/norma/` y `docs/DDL/` (2026-09-17)
+
+Al incorporarse `docs/norma/Transcripcion_GuiaIII_NOM-035.md` (transcripción
+oficial de la Guía III: 72 reactivos, polaridad, dominio/categoría/dimensión,
+preguntas-filtro y umbrales) y `docs/DDL/ddl.sql` (DDL real del esquema), se
+verificaron ambos documentos entre sí y contra todo el scaffolding de la
+sección 3. Resultado: **la transcripción es internamente consistente**
+(reconté las 72 filas: los 10 dominios suman 72, agrupan correctamente en las
+5 categorías de la sección 7.2 del plan original, y las 25 dimensiones
+declaradas coinciden exactamente con las que aparecen en la tabla). El DDL,
+en cambio, tenía varios puntos que **no cuadraban con el scaffolding ya
+escrito** — la mayoría porque los modelos se escribieron antes de que
+existiera el DDL. Se corrigieron los que no requerían una decisión de
+negocio; los que sí, quedaron pendientes de confirmar con el equipo.
+
+### 10.1 Ya corregido en el código (alineación con `ddl.sql`, sin ambigüedad)
+
+- **`opcionRespuestaModel`**: columnas reales son `etiqueta`/`posicion`, no
+  `texto`/`valor`/`orden`. Se documentó explícitamente la fórmula de puntaje
+  que estaba implícita en el DDL: `posicion` es sólo el orden de despliegue
+  (0=Siempre...4=Nunca); el puntaje real depende de `reactivo.polaridad`
+  (`normal` → `4 - posicion`; `invertida` → `posicion`). Nueva
+  `reactivoModel::calcular_puntaje()` centraliza esta fórmula.
+- **`reactivoModel`**: dominio/categoría/dimensión y pregunta-filtro NO son
+  texto libre, son FK a tablas normalizadas (`categoria`, `dominio`,
+  `dimension`, `pregunta_filtro`). No existe `es_condicional`: la
+  condicionalidad es `pregunta_filtro_id IS NULL`. Métodos corregidos.
+- **`guiaModel`**: columnas reales `trabajadores_min`/`trabajadores_max` (no
+  `min_trabajadores`/`max_trabajadores` — esto rompía
+  `por_numero_trabajadores()`). No existen columnas `umbrales_*_json`: los
+  umbrales viven en la tabla normalizada `umbral`.
+- **`tokenModel`**: `fecha_inicio`/`fecha_fin` son `DATE`, no `DATETIME` — se
+  corrigió `esta_vigente()`/`activo_por_centro_trabajo()` para comparar contra
+  `date('Y-m-d')` en vez de `now()` (comparar un `DATE` contra un `DATETIME`
+  completo por cadena fallaba casi todo el día). El `estado` real es
+  `ENUM('activo','inactivo')`, no `('activo','expirado','revocado')`.
+- **`centroTrabajoModel`**: la columna real es `num_trabajadores`, no
+  `numero_trabajadores` (corregido también en `post_centros_trabajo()` y
+  `centrosTrabajoView.php`). `centro_trabajo` **no** tiene `guia_id`: la guía
+  se resuelve con `guiaModel::por_numero_trabajadores()`, no se guarda aquí.
+- **`usuarioModel`**: la relación con centro de trabajo NO es una columna en
+  `usuario` — es al revés, `centro_trabajo.administrador_id` → `usuario.id`,
+  lo que permite que un administrador tenga varios centros (1 a muchos).
+  Corregido el docblock de la decisión de diseño A.
+- **`aplicacionModel`**: columnas reales `nombre` (no `nombre_encuestado`),
+  `atiende_clientes`/`es_jefe` (no `filtro_servicio_clientes`/`filtro_jefe_trabajadores`),
+  `estado` es `'completada'` (femenino), no `'completado'`. No existe
+  `fecha_envio` (se usa `updated_at`). Se agregó
+  `centro_trabajo_id_de($aplicacionId)` (JOIN con `token`) porque `aplicacion`
+  no tiene `centro_trabajo_id` propio — usado ahora por `resultadosController`.
+- **`resultadoModel`**: `calificacion_final` es `INT UNSIGNED`, no
+  `DECIMAL(6,2)` (los umbrales de la norma son enteros). No existen columnas
+  `desglose_*_json`: el desglose vive en la tabla hija `resultado_detalle`.
+- **`respuestaModel`**: no existe columna `valor`; el puntaje se deriva en el
+  momento (`reactivoModel::calcular_puntaje()`), no se persiste en `respuesta`.
+- **`auditoriaModel`** / `registrar_auditoria()`: no existen columnas `ip` ni
+  `creado` (es `created_at`, con `DEFAULT CURRENT_TIMESTAMP`). `usuario_id` y
+  `entidad` son `NOT NULL`; `registrar_auditoria()` ahora exige `$entidad` y
+  no intenta el insert si no hay un usuario de enlace válido en sesión.
+
+### 10.2 Decisiones tomadas por el equipo (2026-09-17)
+
+1. **FK con choque de signo — RESUELTO.** Se corrigió `docs/DDL/ddl.sql`:
+   `usuario.bee_user_id` pasó de `INT UNSIGNED` a `INT` (firmado), para
+   coincidir exactamente con `bee_users.id` (`int(11)` firmado, ver
+   `db_beeframework.sql`). El Bloque C (`ALTER TABLE ... fk_usuario_bee_user`)
+   ya puede aplicarse sin el error 1215.
+2. **`aplicacion` sin `centro_trabajo_id` propio — se deja como JOIN.** No se
+   denormaliza en `ddl.sql`; `aplicacionModel::centro_trabajo_id_de()` (JOIN
+   con `token`, ver 10.1) es la forma definitiva de resolverlo.
+3. **Límite de trabajadores para Guía II — RESUELTO (2026-09-17, segunda
+   revisión).** Confirmado contra el texto oficial de la norma (campo de
+   aplicación): **16** es el valor correcto para `guia.trabajadores_min` de
+   GRII (como ya decía `ddl.sql`); el plan original ("15 a 50") tenía el
+   error, ya corregido ahí y en RF-00. Se agregó el caso que faltaba
+   documentar: un centro de trabajo de **15 trabajadores o menos** tiene
+   obligaciones ligeras y **no requiere aplicar ningún cuestionario** — no
+   es un error del sistema, `guiaModel::por_numero_trabajadores()` regresa
+   `null` a propósito en ese caso y así debe mostrarse en la UI ("no
+   requiere cuestionario"), nunca como mensaje de error genérico. Ver el
+   docblock de `guiaModel::por_numero_trabajadores()` y
+   `centroTrabajoModel::determinar_guia()`, y el TODO agregado en
+   `administradorController::post_centros_trabajo()`. El `min="1"` del
+   input en `centrosTrabajoView.php` refleja que un centro de ≤15
+   trabajadores es un dato válido, no debe bloquearse en el formulario.
+4. **Columna `ip` en `auditoria` — AGREGADA (2026-09-17, segunda revisión).**
+   Se agregó `ip VARCHAR(45) NULL` a `docs/DDL/ddl.sql`, al esquema de
+   `auditoriaModel` y `registrar_auditoria()` ya la puebla con
+   `get_user_ip()` (helper nativo de `bee_core_functions.php`). Justificación
+   del cambio de postura: para un sistema con datos identificados y
+   sensibles (RNF-01), la trazabilidad forense es barata de agregar ahora y
+   cara de reconstruir después si se necesita más adelante.
+
+### 10.3 Aún sin scaffold (tablas nuevas en `ddl.sql` sin modelo Bee)
+
+Decisión del equipo (se reconfirmó en la segunda revisión): **no** generar
+todavía los stubs. `ddl.sql` agrega 6 tablas para las que sigue sin existir
+un modelo: `categoria`, `dominio`, `dimension`, `pregunta_filtro`, `umbral`,
+`resultado_detalle`. **Esto no es un problema hoy, pero es la dependencia
+inmediata en cuanto arranque la lógica de cálculo** (el motor de
+calificación leerá `umbral` para asignar niveles de riesgo y escribirá
+`resultado_detalle` referenciando `categoria`/`dominio`) — con el esquema ya
+firme, el siguiente paso natural del proyecto es justamente el **seed del
+instrumento** (cargar guías, categorías, dominios, dimensiones, reactivos,
+preguntas-filtro y umbrales reales), momento en el que estos 6 modelos se
+volverán necesarios. Se referencian
+ya desde los TODO de `reactivoModel`, `guiaModel` y `resultadoModel` (para
+que quede constancia de qué falta), pero los stubs en sí se crearán más
+adelante, cuando el equipo lo pida.

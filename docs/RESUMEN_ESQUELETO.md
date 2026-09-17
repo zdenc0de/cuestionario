@@ -15,6 +15,13 @@ proyecto (detalladas más abajo).
 > (`requiere_metodo_post()`) y se confirmó que el CSRF del formulario público
 > ya usaba el mecanismo nativo de Bee. También se documentaron dos decisiones
 > de diseño (autenticación/roles y modelo de token). Ver sección 0.
+>
+> **Tercera pasada (verificación contra `docs/norma/` y `docs/DDL/ddl.sql`):**
+> se realineó el scaffolding a los nombres de columna reales del DDL (varios
+> modelos usaban nombres distintos porque se escribieron antes de que el DDL
+> existiera) y quedaron 4 puntos pendientes de confirmar por el equipo (uno
+> de ellos bloqueante para poder aplicar el DDL). Ver `docs/ARQUITECTURA.md`
+> sección 10.
 
 ---
 
