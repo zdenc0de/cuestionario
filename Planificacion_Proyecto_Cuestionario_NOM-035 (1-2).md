@@ -18,8 +18,10 @@ La **NOM-035-STPS-2018** ("Factores de riesgo psicosocial en el trabajo — Iden
 
 El proyecto abarca los **dos cuestionarios de autoevaluación** de la norma, que se aplican de forma excluyente según el tamaño del centro de trabajo:
 
-- **Guía de Referencia II — 46 reactivos**, para centros de trabajo de **15 a 50 trabajadores**.
+- **Guía de Referencia II — 46 reactivos**, para centros de trabajo de **16 a 50 trabajadores**.
 - **Guía de Referencia III — 72 reactivos**, para centros de trabajo de **más de 50 trabajadores**.
+
+> **Corrección (confirmada contra el texto oficial de la norma, campo de aplicación):** el límite inferior de la Guía II es **16**, no 15 — centros de trabajo de **hasta 15 trabajadores** tienen obligaciones ligeras y **no requieren aplicar ningún cuestionario** (ni Guía II ni III). El sistema debe reflejar ese tercer caso explícitamente ("no requiere cuestionario") en vez de tratarlo como un error, ver `guiaModel::por_numero_trabajadores()` en `docs/ARQUITECTURA.md`.
 
 Ambos comparten la misma escala de respuesta tipo Likert de 5 opciones, la misma lógica de preguntas-filtro y un modelo de calificación normado que ubica los resultados en cinco niveles de riesgo; difieren en el número de reactivos, la estructura de dominios/categorías y los umbrales de calificación. Un centro de trabajo aplica **una sola** de las dos guías. El sistema deberá seleccionar automáticamente la guía correcta a partir del número de trabajadores registrado para cada centro.
 
@@ -87,7 +89,7 @@ Desarrollar una plataforma web, sobre PHP y Bee Framework, que permita aplicar d
 
 | ID | Requerimiento |
 |---|---|
-| RF-00 | El sistema selecciona automáticamente la guía a aplicar (II o III) según el número de trabajadores del centro de trabajo (15–50 → Guía II; más de 50 → Guía III). |
+| RF-00 | El sistema selecciona automáticamente la guía a aplicar (II o III) según el número de trabajadores del centro de trabajo (16–50 → Guía II; más de 50 → Guía III; 15 o menos → no requiere cuestionario). |
 | RF-01 | El sistema presenta los reactivos de la guía correspondiente con su escala Likert de 5 opciones (Nunca, Casi nunca, Algunas veces, Casi siempre, Siempre). |
 | RF-02 | El sistema aplica la **lógica condicional** de cada guía mediante sus dos preguntas-filtro ("¿brindo servicio a clientes/usuarios?" y "¿soy jefe de otros trabajadores?"), que habilitan u omiten los reactivos correspondientes (65–68 y 69–72 en la Guía III; 41–43 y 44–46 en la Guía II). |
 | RF-03 | El sistema captura la identificación del encuestado: **nombre** y **número de servidor público**, junto con el **token** de acceso. No se solicitan datos demográficos adicionales. |
@@ -363,7 +365,7 @@ Instalación del entorno (XAMPP, Composer, Bee), configuración y primer arranqu
 ## 16. Glosario
 
 - **NOM-035-STPS-2018:** norma oficial mexicana sobre factores de riesgo psicosocial en el trabajo.
-- **Guía de Referencia II:** cuestionario de 46 reactivos para centros de trabajo de 15 a 50 trabajadores.
+- **Guía de Referencia II:** cuestionario de 46 reactivos para centros de trabajo de 16 a 50 trabajadores.
 - **Guía de Referencia III:** cuestionario de 72 reactivos para centros de trabajo con más de 50 trabajadores.
 - **Factores de riesgo psicosocial:** condiciones del trabajo que pueden provocar trastornos de ansiedad, estrés grave, etc.
 - **Dominio / Categoría:** niveles de agrupación de los reactivos que estructuran la calificación.
