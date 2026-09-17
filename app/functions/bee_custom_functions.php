@@ -117,29 +117,43 @@ function requiere_metodo_post()
  * Registra un movimiento o consulta de un administrador/súper usuario en la
  * bitácora de auditoría (RF-09, RF-12, RNF-01).
  *
+ * Ajustado a docs/DDL/ddl.sql: `auditoria.usuario_id` y `auditoria.entidad`
+ * son NOT NULL, y no existe columna `creado` (created_at ya tiene DEFAULT
+ * CURRENT_TIMESTAMP, no hace falta enviarlo). Sí existe `ip` (agregada
+ * 2026-09-17 para trazabilidad forense sobre datos identificados/sensibles,
+ * RNF-01) y se puebla aquí con get_user_ip() (bee_core_functions.php). Si no
+ * hay un usuario de enlace válido en sesión (usuarioModel), NO se intenta el
+ * insert — fallaría la restricción NOT NULL — se falla en silencio y se
+ * regresa false; en la práctica no debería ocurrir porque requiere_rol() ya
+ * bloquea el acceso antes de llegar aquí en
+ * administradorController/superusuarioController.
+ *
  * TODO (fase de Desarrollo): llamar a esta función desde cada controlador o
  * método sensible (administradorController, superusuarioController,
  * resultadosController) en el momento en que ocurre la acción.
  *
  * @param string $accion    Catálogo de acciones, ej. 'login', 'alta_centro_trabajo', 'generar_token', 'consulta_resultado_individual'
- * @param string|null $entidad     Entidad afectada, ej. 'centro_trabajo', 'token', 'resultado'
+ * @param string $entidad   Entidad afectada, ej. 'centro_trabajo', 'token', 'resultado' — NOT NULL en la BD
  * @param mixed  $entidadId  ID de la entidad afectada
  * @param string|null $detalle Detalle adicional en texto libre
  * @return bool
  */
-function registrar_auditoria(string $accion, string $entidad = null, $entidadId = null, string $detalle = null)
+function registrar_auditoria(string $accion, string $entidad, $entidadId = null, string $detalle = null)
 {
   $usuario = obtener_usuario_actual();
 
+  if (empty($usuario['id'])) {
+    return false;
+  }
+
   $data =
   [
-    'usuario_id' => $usuario['id'] ?? null, // FK -> usuario.id (tabla de enlace), NO bee_users.id — ver decisión de diseño A
+    'usuario_id' => $usuario['id'], // FK -> usuario.id (tabla de enlace), NO bee_users.id — ver decisión de diseño A
     'accion'     => $accion,
     'entidad'    => $entidad,
     'entidad_id' => $entidadId,
     'detalle'    => $detalle,
-    'ip'         => get_user_ip(),
-    'creado'     => now()
+    'ip'         => get_user_ip()
   ];
 
   return auditoriaModel::insertOne($data);
