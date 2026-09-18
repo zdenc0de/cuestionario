@@ -67,6 +67,19 @@ class cuestionarioController extends Controller implements ControllerInterface
 
       // TODO: validar $_POST['token'] con tokenModel::esta_vigente()
       // TODO: validar unicidad con aplicacionModel::existe_para_token_y_servidor_publico()
+      // TODO (defensa en profundidad, guard NOM-035): una vez resuelto el
+      // centro de trabajo del token (tokenModel::by_codigo()->centro_trabajo_id
+      // -> centroTrabajoModel::by_id()->num_trabajadores), volver a validar
+      // guiaModel::por_numero_trabajadores($centroTrabajo['num_trabajadores']).
+      // Si regresa null (≤15 trabajadores, ninguna guía aplica — 16–50 GRII,
+      // >50 GRIII), NO continuar con el flujo del cuestionario y mostrar
+      // Flasher::error('Los centros de trabajo de hasta 15 trabajadores no
+      // requieren la aplicación de este cuestionario conforme a la NOM-035.').
+      // En condiciones normales esto no debería ocurrir porque
+      // administradorController::post_centros_trabajo() ya bloquea la
+      // creación de esos centros de trabajo (ver ese guard); esta es sólo la
+      // segunda capa, por si un token quedara ligado a un centro de trabajo
+      // con datos inconsistentes (ej. cargados directo en la base de datos).
       // TODO: crear/recuperar aplicacionModel para este token + encuestado
       // TODO: redirigir a responder($token) si es válido
 

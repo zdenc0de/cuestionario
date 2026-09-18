@@ -64,9 +64,10 @@ class administradorController extends Controller implements ControllerInterface
    * Alta de un nuevo centro de trabajo (RF-10)
    * TODO (fase de Desarrollo): implementar validaciones y determinar la guía
    * automáticamente con guiaModel::por_numero_trabajadores() (RF-00).
-   * IMPORTANTE: para 15 trabajadores o menos, ese método regresa `null` a
-   * propósito (no requiere cuestionario, no es un error) — mostrar un
-   * mensaje informativo distinto, no el genérico de "pendiente" de abajo.
+   *
+   * Regla NOM-035 (Campo de aplicación), ya resuelta por
+   * guiaModel::por_numero_trabajadores(): ≤15 trabajadores no requiere este
+   * cuestionario (ninguna guía aplica) / 16–50 → Guía II / >50 → Guía III.
    */
   function post_centros_trabajo()
   {
@@ -84,11 +85,21 @@ class administradorController extends Controller implements ControllerInterface
 
       array_map('sanitize_input', $_POST);
 
-      // TODO: la guía NO se guarda en centro_trabajo (ver docs/DDL/ddl.sql); se resuelve
-      // al momento con guiaModel::por_numero_trabajadores((int) $_POST['num_trabajadores']).
-      // TODO: si el resultado es null y num_trabajadores <= 15, informar "este centro
-      // de trabajo no requiere cuestionario" (RF-00) en vez de tratarlo como error.
+      // Guard NOM-035: si el número de trabajadores no cae en el rango de
+      // ninguna guía (≤15), NO se continúa con el flujo del cuestionario.
+      // La guía NO se guarda en centro_trabajo (ver docs/DDL/ddl.sql); se
+      // resuelve en el momento con guiaModel::por_numero_trabajadores().
+      $numTrabajadores = (int) $_POST['num_trabajadores'];
+      $guia            = guiaModel::por_numero_trabajadores($numTrabajadores);
+
+      if ($guia === null) {
+        Flasher::error('Los centros de trabajo de hasta 15 trabajadores no requieren la aplicación de este cuestionario conforme a la NOM-035.');
+        Redirect::back();
+      }
+
       // TODO: centroTrabajoModel::insertOne([...]) incluyendo administrador_id = obtener_usuario_actual()['id']
+      // (la guía resuelta arriba NO se persiste en centro_trabajo, sólo se usa para este guard;
+      // se vuelve a resolver más adelante al momento de responder/generar resultados)
       // TODO: registrar_auditoria('alta_centro_trabajo', 'centro_trabajo', $id)
 
       Flasher::error('Funcionalidad pendiente de implementación (fase de Desarrollo).');

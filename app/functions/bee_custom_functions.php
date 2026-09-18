@@ -119,13 +119,28 @@ function requiere_metodo_post()
  *
  * Ajustado a docs/DDL/ddl.sql: `auditoria.usuario_id` y `auditoria.entidad`
  * son NOT NULL, y no existe columna `creado` (created_at ya tiene DEFAULT
- * CURRENT_TIMESTAMP, no hace falta enviarlo). Sí existe `ip` (agregada
- * 2026-09-17 para trazabilidad forense sobre datos identificados/sensibles,
- * RNF-01) y se puebla aquí con get_user_ip() (bee_core_functions.php). Si no
- * hay un usuario de enlace válido en sesión (usuarioModel), NO se intenta el
- * insert — fallaría la restricción NOT NULL — se falla en silencio y se
- * regresa false; en la práctica no debería ocurrir porque requiere_rol() ya
- * bloquea el acceso antes de llegar aquí en
+ * CURRENT_TIMESTAMP, no hace falta enviarlo). `ip` sí existe (VARCHAR(45)
+ * NULL, para trazabilidad forense sobre datos identificados/sensibles,
+ * RNF-01) y es NULLABLE: si no se puede determinar, se envía `null` y el
+ * insert no falla. Se captura internamente aquí, NO se recibe como
+ * parámetro — no hay que pasarla al llamar la función.
+ *
+ * IP: se usa $_SERVER['REMOTE_ADDR'] directamente (la conexión TCP real),
+ * NO get_user_ip() de bee_core_functions.php, porque esa función confía a
+ * ciegas en cabeceras que el cliente puede falsificar (X-Forwarded-For,
+ * X-Forwarded, Client-IP) cuando no hay proxy de por medio.
+ * TODO (producción): si el sistema queda detrás de un proxy/reverse proxy
+ * (load balancer, Cloudflare, nginx como frontend, etc.), REMOTE_ADDR pasará
+ * a ser la IP del proxy, no la del cliente. En ese momento hay que resolver
+ * la IP real a partir de X-Forwarded-For (o el header que use ese proxy),
+ * pero SÓLO confiando en el valor si la petición viene de una lista cerrada
+ * de proxies de confianza — nunca tomar ese header a ciegas de cualquier
+ * origen, es trivialmente falsificable por el cliente.
+ *
+ * Si no hay un usuario de enlace válido en sesión (usuarioModel), NO se
+ * intenta el insert — fallaría la restricción NOT NULL de usuario_id — se
+ * falla en silencio y se regresa false; en la práctica no debería ocurrir
+ * porque requiere_rol() ya bloquea el acceso antes de llegar aquí en
  * administradorController/superusuarioController.
  *
  * TODO (fase de Desarrollo): llamar a esta función desde cada controlador o
@@ -153,7 +168,7 @@ function registrar_auditoria(string $accion, string $entidad, $entidadId = null,
     'entidad'    => $entidad,
     'entidad_id' => $entidadId,
     'detalle'    => $detalle,
-    'ip'         => get_user_ip()
+    'ip'         => $_SERVER['REMOTE_ADDR'] ?? null // opcional: la columna es NULL, no hay problema si no está disponible
   ];
 
   return auditoriaModel::insertOne($data);
