@@ -1,24 +1,30 @@
 # Bitácora de cambios — Cuestionario NOM-035 (sesiones con Claude)
 
 > Documento de auditoría: enumera **todos** los archivos creados o modificados
-> por el agente Claude en este proyecto hasta el 2026-09-17, en qué momento
-> (de 4 pasadas de trabajo) y **por qué**, para que otro agente/desarrollador
+> por el agente Claude en este proyecto hasta el 2026-09-18, en qué momento
+> (de 5 pasadas de trabajo) y **por qué**, para que otro agente/desarrollador
 > pueda revisarlo contra el código real. No repite la explicación funcional
 > de cada módulo (eso ya está en `docs/ARQUITECTURA.md`); aquí el foco es
 > **el cambio puntual y su justificación**.
 >
-> Contexto de repositorio en el momento de escribir esto: rama `main`,
-> HEAD en `e73100a`. Buena parte de la Pasada 1 y 2 ya está commiteada
-> (commits `04768f0`, `9462945`, `76c8476`, `348ffda`, `e73100a`); las
-> pasadas 3 y 4 (verificación contra `docs/norma/`/`docs/DDL/` y ajustes de
-> una segunda revisión) están en el working tree, sin commitear todavía.
-> Claude no ejecutó ningún comando de Git en ningún momento; los commits
-> fueron corridos por el usuario con comandos que Claude únicamente redactó
-> como texto.
+> Contexto de repositorio en el momento de escribir esto: rama `main`, HEAD
+> en `8d56294`. Las pasadas 1–4 ya están commiteadas (hasta el commit
+> `4328ac7`); entre medio se agregaron dos commits que **no** son de Claude
+> (`f025fd7` limpieza de un archivo duplicado por el usuario, `82c2166` +
+> `8d56294` el rediseño con Tailwind CSS hecho por la compañera del usuario).
+> La Pasada 5 (este documento) está en el working tree, sin commitear
+> todavía, junto con un ajuste aparte fuera de estas 5 pasadas:
+> `app/core/settings.php` (`DEFAULT_CONTROLLER` de `'bee'` a `'cuestionario'`),
+> hecho en un soporte puntual para que la raíz del sitio muestre el módulo
+> público en vez de la página demo de Bee — no forma parte de ninguna de las
+> 5 pasadas de scaffolding/verificación, se documentó únicamente en el chat
+> de esa sesión. Claude no ejecutó ningún comando de Git en ningún momento;
+> los commits fueron corridos por el usuario con comandos que Claude
+> únicamente redactó como texto.
 
 ---
 
-## 0. Las 3 pasadas de trabajo
+## 0. Las 5 pasadas de trabajo
 
 | Pasada | Disparador | Qué produjo |
 |---|---|---|
@@ -26,8 +32,9 @@
 | **2. Hardening** | "guard de rol, verbo HTTP, CSRF público + documentar 2 decisiones de diseño" | `requiere_rol()`, `requiere_metodo_post()`, ajustes a `tokenModel`/`usuarioModel`/`aplicacionModel`, secciones 7-8 de `ARQUITECTURA.md`. |
 | **3. Verificación** | "comprueba que `docs/norma/Transcripcion_GuiaIII_NOM-035.md` y `docs/DDL/ddl.sql` cumplan y no generen problemas" | Realineación de nombres de columnas en los 11 modelos + 1 fix en `ddl.sql` + sección 10 de `ARQUITECTURA.md`. |
 | **4. Segunda revisión** | Un segundo agente revisó la Pasada 3 y propuso 4 ajustes antes de commitear | Límite de Guía II resuelto (16, con el caso ≤15 documentado), columna `ip` agregada a `auditoria`, nota sobre `secretaria.logo`, refuerzo de la dependencia hacia los 6 modelos faltantes. |
+| **5. Ajustes puntuales** | Prompt de "mi agente": afinar la captura de `ip` y agregar el guard funcional de ≤15 trabajadores | `registrar_auditoria()` deja de usar `get_user_ip()` (confía en cabeceras falsificables) y usa `$_SERVER['REMOTE_ADDR']`; guard real en `administradorController::post_centros_trabajo()`; TODO detallado del mismo guard en `cuestionarioController::post_acceso()`; sección 11 de `ARQUITECTURA.md`. |
 
-En las 4 pasadas se respetaron las mismas restricciones: **no** se ejecutó
+En las 5 pasadas se respetaron las mismas restricciones: **no** se ejecutó
 Git, **no** se modificó ningún archivo de `app/classes/*` (núcleo de Bee), y
 todo lo agregado sigue las convenciones nativas de Bee Framework 1.5.8
 (controladores `xyzController extends Controller implements ControllerInterface`,
@@ -229,6 +236,13 @@ a como se creó originalmente.
   ejecutaría la lógica de todos modos.
 - **Pasada 3:** sin cambios de código; se agregó un TODO señalando
   `aplicacionModel::existe_para_token_y_servidor_publico()` en `post_acceso()`.
+- **Pasada 5:** se amplió el TODO de `post_acceso()` con la cadena exacta de
+  llamadas para el guard de ≤15 trabajadores como defensa en profundidad
+  (`tokenModel::by_codigo()` → `centroTrabajoModel::by_id()` →
+  `guiaModel::por_numero_trabajadores()`), sin implementarlo — **por qué:**
+  implementarlo de verdad requeriría además resolver token→centro de
+  trabajo, que sigue sin existir (`tokenModel::esta_vigente()` aún es TODO);
+  eso ya sería lógica nueva, fuera del alcance de este ajuste puntual.
 
 ### 2.2 `administradorController.php` (rol `administrador`)
 - **Pasada 1:** creado con `index()`, `centros_trabajo()`/`post_centros_trabajo()`,
@@ -255,6 +269,14 @@ a como se creó originalmente.
   mostrarse como "no requiere cuestionario" en vez del mensaje genérico de
   "pendiente de implementación" — **por qué:** para que quien implemente
   esto en la fase de Desarrollo no lo trate como una excepción.
+- **Pasada 5:** ese TODO se convirtió en código real. `post_centros_trabajo()`
+  ahora resuelve `guiaModel::por_numero_trabajadores((int) $_POST['num_trabajadores'])`
+  y, si regresa `null`, corta el flujo con `Flasher::error(...)` +
+  `Redirect::back()` antes de llegar al bloque de alta (que sigue siendo
+  TODO). **Por qué:** el prompt pedía explícitamente un guard funcional, no
+  sólo un comentario — y éste es el único punto del sistema donde
+  `num_trabajadores` llega como dato crudo, sin depender de tablas que
+  todavía no existen.
 
 ### 2.3 `superusuarioController.php` (rol `superusuario`)
 - **Pasada 1:** creado con `index()`, `administradores()`/`post_administradores()`,
@@ -355,6 +377,17 @@ extendió aquí en vez de tocar `app/classes/*`.
 - **Pasada 4:** volvió la clave `'ip' => get_user_ip()` al arreglo de
   inserción — **por qué:** ahora sí existe la columna real (ver sección 7),
   tras la recomendación del segundo agente sobre trazabilidad forense.
+- **Pasada 5:** `get_user_ip()` se reemplazó por `$_SERVER['REMOTE_ADDR'] ?? null`
+  — **por qué:** `get_user_ip()` confía primero en `HTTP_CLIENT_IP`/
+  `HTTP_X_FORWARDED_FOR`/`HTTP_X_FORWARDED` (cabeceras que el cliente puede
+  falsificar sin que haya un proxy real de por medio) antes de caer a
+  `REMOTE_ADDR`; para una bitácora forense eso es contraproducente. Se
+  agregó un `TODO` extenso sobre cómo manejar esto correctamente el día que
+  el sistema quede detrás de un proxy real (resolver `X-Forwarded-For` sólo
+  si la petición viene de una lista cerrada de proxies de confianza). La IP
+  sigue sin ser parámetro de la función y sigue siendo opcional (`null` si
+  no está disponible, la columna admite `NULL`); el guard de `usuario_id`
+  de la Pasada 3 no se tocó.
 
 ---
 
@@ -484,7 +517,75 @@ Esto **no** se hizo a propósito, no es un olvido:
 
 ---
 
-## 10. Restricciones respetadas en las 4 pasadas
+## 11. Pasada 5 — ajustes puntuales (2026-09-18)
+
+Prompt recibido de "mi agente" (otro asistente del equipo): dos ajustes
+pequeños sobre lo que dejó la Pasada 4, tomando `docs/DDL/ddl.sql` como
+única fuente de verdad del esquema, sin lógica de calificación.
+
+### 11.1 `app/functions/bee_custom_functions.php` — `registrar_auditoria()`
+
+La columna `ip` y el docblock de esquema de `auditoriaModel` **ya
+existían** desde la Pasada 4 (sección 1.11) — no hubo que tocar `ddl.sql`
+ni `auditoriaModel.php` de nuevo, ambos ya cumplían lo pedido. Lo que
+cambió fue exclusivamente **cómo se captura la IP** dentro de
+`registrar_auditoria()`:
+
+- Se quitó `get_user_ip()` (helper de `bee_core_functions.php`) y se
+  reemplazó por `$_SERVER['REMOTE_ADDR'] ?? null`. **Por qué:** `get_user_ip()`
+  confía, en ese orden, en `HTTP_CLIENT_IP`, `HTTP_X_FORWARDED_FOR` y
+  `HTTP_X_FORWARDED` **antes** de caer a `REMOTE_ADDR` — esas cabeceras las
+  puede mandar el propio cliente con cualquier valor cuando no hay un proxy
+  real reescribiéndolas, así que confiar en ellas a ciegas para una
+  bitácora forense es contraproducente (el atacante controla el dato que
+  se guarda sobre sí mismo).
+- Se agregó un bloque `TODO` extenso explicando que, en producción, si el
+  sistema queda detrás de un proxy/reverse proxy, `REMOTE_ADDR` pasa a ser
+  la IP del proxy, y ahí sí habría que resolver `X-Forwarded-For` — pero
+  únicamente si la petición viene de una lista cerrada de proxies de
+  confianza, nunca a ciegas.
+- La IP sigue **sin ser un parámetro nuevo** de la función (se capta
+  internamente, como pedía la instrucción) y sigue siendo opcional: si
+  `REMOTE_ADDR` no está disponible se guarda `null` (la columna es
+  `NULL`), sin que falle el `insertOne()`. El guard existente que exige un
+  `usuario_id` de enlace válido (Pasada 3) **no se tocó**.
+
+### 11.2 Guard funcional para centros de trabajo de ≤15 trabajadores
+
+`guiaModel::por_numero_trabajadores()` (sección 1.5) **ya regresaba `null`
+de forma limpia** para `<=15` desde la Pasada 4 — se confirmó de nuevo, sin
+necesidad de tocar su SQL. Lo que faltaba era que los controladores que lo
+consumen **actuaran** sobre ese `null` en vez de sólo tener un comentario
+`TODO` al respecto:
+
+- **`app/controllers/administradorController.php`** (`post_centros_trabajo()`):
+  se agregó el guard real — resuelve `guiaModel::por_numero_trabajadores((int) $_POST['num_trabajadores'])`
+  y, si regresa `null`, corta el flujo con
+  `Flasher::error('Los centros de trabajo de hasta 15 trabajadores no
+  requieren la aplicación de este cuestionario conforme a la NOM-035.')` +
+  `Redirect::back()` (que hace `die()` internamente, ver `Redirect.php`) —
+  no llega a la parte de alta en la base de datos, que sigue como `TODO`
+  pendiente de la fase de Desarrollo. **Por qué aquí primero:** es el único
+  punto donde `num_trabajadores` llega como dato crudo del formulario, sin
+  depender de ninguna otra tabla todavía sin implementar.
+- **`app/controllers/cuestionarioController.php`** (`post_acceso()`): el
+  mismo guard, como defensa en profundidad para el acceso del encuestado,
+  se dejó como `TODO` **detallado** (con la cadena exacta de métodos a
+  llamar: `tokenModel::by_codigo()` → `centroTrabajoModel::by_id()` →
+  `guiaModel::por_numero_trabajadores()`), sin implementarlo todavía.
+  **Por qué no se implementó de una vez:** hacerlo real requeriría también
+  construir la resolución token→centro de trabajo, que sigue siendo `TODO`
+  desde la Pasada 1 (`tokenModel::esta_vigente()` no está implementado) —
+  eso ya sería lógica de negocio nueva, fuera del alcance de "dos ajustes
+  pequeños" de este prompt. En condiciones normales este guard nunca
+  debería activarse aquí, porque el de `administradorController` ya impide
+  crear esos centros de trabajo; queda documentado por si algún día se
+  cargan datos directo en la base de datos sin pasar por el administrador.
+- `docs/ARQUITECTURA.md` sección 11 documenta ambos puntos.
+
+---
+
+## 12. Restricciones respetadas en las 5 pasadas
 
 - **Cero comandos de Git ejecutados por Claude.** Cuando el usuario pidió
   los 6 commits segmentados, Claude entregó los comandos como texto para que
@@ -497,8 +598,10 @@ Esto **no** se hizo a propósito, no es un olvido:
 - **Los dos únicos archivos "existentes" que se modificaron** fueron los que
   el propio Bee reserva para el proyecto: `app/functions/bee_custom_functions.php`
   y `templates/includes/styles.php` (secciones 4 y 5).
-- **`docs/DDL/ddl.sql`** se modificó dos veces (Pasada 3 y Pasada 4), ambas
-  con autorización explícita pedida antes de aplicar el cambio (sección 7).
+- **`docs/DDL/ddl.sql`** se modificó dos veces (Pasada 3 y Pasada 4); en la
+  Pasada 5 se leyó como fuente de verdad pero **no** se volvió a tocar,
+  porque ya cumplía lo pedido. Ambas modificaciones previas se hicieron con
+  autorización explícita pedida antes de aplicar el cambio (sección 7).
 - **`Planificacion_Proyecto_Cuestionario_NOM-035 (1-2).md`** se tocó por
   primera vez en la Pasada 4 (3 líneas: el límite de la Guía II y RF-00),
   también para corregir un dato que el segundo agente confirmó como

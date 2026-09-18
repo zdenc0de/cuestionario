@@ -436,3 +436,58 @@ volverán necesarios. Se referencian
 ya desde los TODO de `reactivoModel`, `guiaModel` y `resultadoModel` (para
 que quede constancia de qué falta), pero los stubs en sí se crearán más
 adelante, cuando el equipo lo pida.
+
+---
+
+## 11. Ajustes puntuales (2026-09-18)
+
+Dos ajustes pequeños, sin lógica de calificación, ordenados por el equipo
+para cerrar por completo lo dejado pendiente en la sección 10.
+
+### 11.1 Columna `ip` en la bitácora de auditoría
+
+La columna (`docs/DDL/ddl.sql`) y el docblock de esquema (`auditoriaModel`)
+ya existían desde la revisión de la sección 10.2 punto 4. Lo que se ajustó
+ahora fue **cómo se captura**, dentro de `registrar_auditoria()`
+(`app/functions/bee_custom_functions.php`):
+
+- Antes: `get_user_ip()` (helper de `bee_core_functions.php`), que confía en
+  cabeceras `X-Forwarded-For`/`X-Forwarded`/`Client-IP` **antes** de caer a
+  `REMOTE_ADDR` — esas cabeceras las puede falsificar el propio cliente
+  cuando no hay un proxy real reescribiéndolas.
+- Ahora: `$_SERVER['REMOTE_ADDR'] ?? null` directamente (la IP de la
+  conexión TCP real). Sigue siendo un parámetro interno, no se agregó como
+  argumento nuevo de la función. Es opcional: si no está disponible, se
+  guarda `null` (la columna es `NULL`), sin que falle el `insertOne()`. El
+  guard existente que exige un `usuario_id` de enlace válido no se tocó.
+- Se dejó un `TODO` explícito para producción: si el sistema queda detrás de
+  un proxy/reverse proxy, `REMOTE_ADDR` pasará a ser la IP del proxy, no la
+  del cliente — en ese momento hay que resolver la IP real desde
+  `X-Forwarded-For`, pero **sólo** si la petición viene de una lista cerrada
+  de proxies de confianza, nunca confiando en ese header a ciegas.
+
+### 11.2 Guard explícito para centros de trabajo de ≤15 trabajadores
+
+Regla NOM-035 (Campo de aplicación), ya resuelta correctamente por
+`guiaModel::por_numero_trabajadores()` desde la sección 10.2 punto 3: **≤15
+trabajadores → ninguna guía aplica (no requiere cuestionario) / 16–50 →
+Guía II / >50 → Guía III.** Se confirmó que el método ya regresaba `null`
+de forma limpia para ese caso (no hizo falta tocar su lógica SQL); lo que
+faltaba era que **quien lo consume actúe sobre ese `null`**, en vez de
+seguir de largo:
+
+- **`administradorController::post_centros_trabajo()`** — se agregó el
+  guard real: resuelve `guiaModel::por_numero_trabajadores((int) $_POST['num_trabajadores'])`
+  y, si regresa `null`, corta el flujo con
+  `Flasher::error('Los centros de trabajo de hasta 15 trabajadores no
+  requieren la aplicación de este cuestionario conforme a la NOM-035.')` y
+  `Redirect::back()` — no llega a la parte de alta (que sigue como `TODO`,
+  pendiente de la fase de Desarrollo).
+- **`cuestionarioController::post_acceso()`** — el mismo guard, como
+  defensa en profundidad para el acceso del encuestado, quedó documentado
+  como `TODO` detallado (no implementado todavía): una vez resuelto el
+  centro de trabajo del token, hay que volver a validar
+  `guiaModel::por_numero_trabajadores()` sobre su `num_trabajadores`. En
+  condiciones normales nunca debería activarse aquí (el guard de arriba ya
+  impide crear esos centros de trabajo), pero cubre el caso de datos
+  cargados directo en la base de datos sin pasar por el administrador.
