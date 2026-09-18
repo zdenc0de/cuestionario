@@ -157,7 +157,10 @@ define('LDB_PASS'                , '');
 define('LDB_CHARSET'             , 'utf8');
 
 // El controlador por defecto / el método por defecto / el controlador de errores por defecto
-define('DEFAULT_CONTROLLER'      , 'bee');
+// 'cuestionario' (no 'bee'): la raíz del sitio debe llevar directo al acceso
+// público del cuestionario NOM-035, no a la página de demostración de Bee.
+// Bee sigue disponible visitando /bee explícitamente.
+define('DEFAULT_CONTROLLER'      , 'cuestionario');
 define('DEFAULT_ERROR_CONTROLLER', 'error');
 define('DEFAULT_METHOD'          , 'index');
 
