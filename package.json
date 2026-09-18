@@ -1,0 +1,20 @@
+{
+  "name": "cuestionario-nom035",
+  "version": "1.0.0",
+  "description": "Sistema de aplicación y evaluación de cuestionarios NOM-035-STPS-2018 para la Secretaría de Cultura y Turismo",
+  "scripts": {
+    "build:css": "tailwindcss -i ./assets/css/input.css -o ./assets/css/tailwind.css --minify",
+    "watch:css": "tailwindcss -i ./assets/css/input.css -o ./assets/css/tailwind.css --watch"
+  },
+  "keywords": [
+    "nom-035",
+    "bee-framework",
+    "tailwind"
+  ],
+  "author": "Secretaría de Cultura y Turismo del Estado de México",
+  "license": "MIT",
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  }
+}
+
