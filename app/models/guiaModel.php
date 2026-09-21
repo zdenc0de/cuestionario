@@ -10,9 +10,9 @@
  * código (nombre, número de reactivos, rango de trabajadores, umbrales).
  *
  * Los umbrales de calificación NO se guardan aquí como JSON: viven
- * normalizados en la tabla `umbral` (ver umbralModel — pendiente de
- * scaffolding) con una fila por (guia_id, nivel_agregacion, categoria_id|
- * dominio_id, nivel_riesgo). Ver docs/DDL/ddl.sql.
+ * normalizados en la tabla `umbral` (ver umbralModel) con una fila por
+ * (guia_id, nivel_agregacion, categoria_id|dominio_id, nivel_riesgo).
+ * Ver docs/DDL/ddl.sql.
  *
  * RF-00 — CONFIRMADO contra el texto oficial de la norma (campo de
  * aplicación): 16 a 50 trabajadores -> Guía II; más de 50 -> Guía III;
@@ -102,23 +102,30 @@ class guiaModel extends Model {
 
   /**
    * Regresa el nivel de riesgo correspondiente a una calificación, contra la
-   * tabla `umbral` (ver umbralModel — pendiente de scaffolding).
-   * TODO (fase de Desarrollo): implementar con umbralModel::nivel_para()
-   * una vez exista ese modelo.
+   * tabla `umbral`. Punto de entrada único de conveniencia; internamente
+   * delega en el método específico de umbralModel según $nivelAgregacion
+   * (que es lo que usa directamente resultadoModel::calcular_para_aplicacion()
+   * para no tener que decidir aquí cuál de los tres invocar).
    *
-   * @param mixed $guiaId
+   * @param mixed $guiaId Sólo se usa si $nivelAgregacion = 'final'
    * @param int $calificacion
    * @param string $nivelAgregacion 'final' | 'categoria' | 'dominio'
-   * @param mixed $categoriaODominioId NULL si $nivelAgregacion = 'final'
+   * @param mixed $categoriaODominioId NULL si $nivelAgregacion = 'final'; el id de categoria/dominio en los otros dos casos
    * @return string|null 'nulo'|'bajo'|'medio'|'alto'|'muy_alto'
    */
   static function nivel_de_riesgo($guiaId, int $calificacion, string $nivelAgregacion = 'final', $categoriaODominioId = null)
   {
-    // TODO: SELECT nivel_riesgo FROM umbral WHERE guia_id = :guia_id AND nivel_agregacion = :nivel
-    //       AND (categoria_id = :id OR dominio_id = :id OR (:nivel = 'final'))
-    //       AND (limite_inferior IS NULL OR :calificacion >= limite_inferior)
-    //       AND (limite_superior IS NULL OR :calificacion < limite_superior)
-    return null;
+    switch ($nivelAgregacion) {
+      case 'categoria':
+        return umbralModel::nivel_categoria($categoriaODominioId, $calificacion);
+
+      case 'dominio':
+        return umbralModel::nivel_dominio($categoriaODominioId, $calificacion);
+
+      case 'final':
+      default:
+        return umbralModel::nivel_final($guiaId, $calificacion);
+    }
   }
 
   static function update_by_id($id, $params)
