@@ -1,30 +1,24 @@
 # Bitácora de cambios — Cuestionario NOM-035 (sesiones con Claude)
 
 > Documento de auditoría: enumera **todos** los archivos creados o modificados
-> por el agente Claude en este proyecto hasta el 2026-09-18, en qué momento
-> (de 5 pasadas de trabajo) y **por qué**, para que otro agente/desarrollador
+> por el agente Claude en este proyecto hasta el 2026-09-21, en qué momento
+> (de 6 pasadas de trabajo) y **por qué**, para que otro agente/desarrollador
 > pueda revisarlo contra el código real. No repite la explicación funcional
 > de cada módulo (eso ya está en `docs/ARQUITECTURA.md`); aquí el foco es
 > **el cambio puntual y su justificación**.
 >
 > Contexto de repositorio en el momento de escribir esto: rama `main`, HEAD
-> en `8d56294`. Las pasadas 1–4 ya están commiteadas (hasta el commit
-> `4328ac7`); entre medio se agregaron dos commits que **no** son de Claude
-> (`f025fd7` limpieza de un archivo duplicado por el usuario, `82c2166` +
-> `8d56294` el rediseño con Tailwind CSS hecho por la compañera del usuario).
-> La Pasada 5 (este documento) está en el working tree, sin commitear
-> todavía, junto con un ajuste aparte fuera de estas 5 pasadas:
-> `app/core/settings.php` (`DEFAULT_CONTROLLER` de `'bee'` a `'cuestionario'`),
-> hecho en un soporte puntual para que la raíz del sitio muestre el módulo
-> público en vez de la página demo de Bee — no forma parte de ninguna de las
-> 5 pasadas de scaffolding/verificación, se documentó únicamente en el chat
-> de esa sesión. Claude no ejecutó ningún comando de Git en ningún momento;
-> los commits fueron corridos por el usuario con comandos que Claude
-> únicamente redactó como texto.
+> en `9ca9368` ("feat(docs): add initial handoff document for NOM-035
+> project" — `docs/HANDOFF_DESARROLLO.md`, no es de Claude). Las pasadas 1–5
+> y el ajuste de `DEFAULT_CONTROLLER` ya están commiteados (hasta
+> `f6ee735`/`ebe6efd`). La Pasada 6 (este documento) está en el working
+> tree, sin commitear todavía. Claude no ejecutó ningún comando de Git en
+> ningún momento; los commits fueron corridos por el usuario con comandos
+> que Claude únicamente redactó como texto.
 
 ---
 
-## 0. Las 5 pasadas de trabajo
+## 0. Las 6 pasadas de trabajo
 
 | Pasada | Disparador | Qué produjo |
 |---|---|---|
@@ -33,8 +27,9 @@
 | **3. Verificación** | "comprueba que `docs/norma/Transcripcion_GuiaIII_NOM-035.md` y `docs/DDL/ddl.sql` cumplan y no generen problemas" | Realineación de nombres de columnas en los 11 modelos + 1 fix en `ddl.sql` + sección 10 de `ARQUITECTURA.md`. |
 | **4. Segunda revisión** | Un segundo agente revisó la Pasada 3 y propuso 4 ajustes antes de commitear | Límite de Guía II resuelto (16, con el caso ≤15 documentado), columna `ip` agregada a `auditoria`, nota sobre `secretaria.logo`, refuerzo de la dependencia hacia los 6 modelos faltantes. |
 | **5. Ajustes puntuales** | Prompt de "mi agente": afinar la captura de `ip` y agregar el guard funcional de ≤15 trabajadores | `registrar_auditoria()` deja de usar `get_user_ip()` (confía en cabeceras falsificables) y usa `$_SERVER['REMOTE_ADDR']`; guard real en `administradorController::post_centros_trabajo()`; TODO detallado del mismo guard en `cuestionarioController::post_acceso()`; sección 11 de `ARQUITECTURA.md`. |
+| **6. Motor de calificación** | `docs/HANDOFF_DESARROLLO.md` §5 — primera tarea de desarrollo real | 4 modelos nuevos (`categoriaModel`, `dominioModel`, `umbralModel`, `resultadoDetalleModel`), `resultadoModel::calcular_para_aplicacion()` implementado de verdad (ya no es un stub), script de verificación, corrida y confirmada contra la BD real (0 fallos), sección 13 de `ARQUITECTURA.md`. |
 
-En las 5 pasadas se respetaron las mismas restricciones: **no** se ejecutó
+En las 6 pasadas se respetaron las mismas restricciones: **no** se ejecutó
 Git, **no** se modificó ningún archivo de `app/classes/*` (núcleo de Bee), y
 todo lo agregado sigue las convenciones nativas de Bee Framework 1.5.8
 (controladores `xyzController extends Controller implements ControllerInterface`,
@@ -133,6 +128,10 @@ a como se creó originalmente.
   que lo consuma debe mostrar un mensaje informativo distinto al genérico de
   error. **Por qué:** evitar que en la fase de Desarrollo alguien trate ese
   `null` como un caso de "no encontrado"/error.
+- **Pasada 6:** `nivel_de_riesgo()` dejó de ser un TODO — ahora delega en
+  `umbralModel::nivel_final()`/`nivel_categoria()`/`nivel_dominio()` según
+  `$nivelAgregacion`. Se quitaron las 2 referencias a "`umbralModel` —
+  pendiente de scaffolding" del docblock de la clase (ya existe, ver 1.12).
 
 ### 1.6 `reactivoModel.php`
 - **Pasada 1:** creado con `dominio`/`categoria` como texto libre (`VARCHAR`)
@@ -195,6 +194,12 @@ a como se creó originalmente.
   como JSON. `agregado_por_centro_trabajo()` se corrigió para hacer doble
   JOIN (`resultado → aplicacion → token`) en vez de un JOIN directo a una
   columna `aplicacion.centro_trabajo_id` que no existe (mismo motivo que 1.8).
+- **Pasada 6:** `calcular_para_aplicacion()` implementado de verdad (dejó de
+  regresar `null`). Ver el detalle completo en la sección 12 (es el cambio
+  central de esta pasada, con el hallazgo de la transacción colgada de
+  `Db::query()`, la persistencia atómica e idempotente, y por qué no se usa
+  `resultadoDetalleModel::insertOne()` dentro de esa transacción manual
+  (usaría `transaction=true` por default y la cerraría antes de tiempo).
 
 ### 1.10 `respuestaModel.php`
 - **Pasada 1:** creado con columna `valor TINYINT` (puntaje ya calculado).
@@ -206,6 +211,8 @@ a como se creó originalmente.
   `polaridad`, `dominio_id`, `categoria_id`, `posicion` en la misma consulta
   — **por qué:** es el insumo directo que necesitará
   `resultadoModel::calcular_para_aplicacion()` en la fase de Desarrollo.
+- **Pasada 6:** sin cambios — `por_aplicacion()` ya traía exactamente lo que
+  el motor de calificación necesitaba, confirmado al usarlo de verdad.
 
 ### 1.11 `auditoriaModel.php`
 - **Pasada 1:** creado con columnas `ip VARCHAR(45)` y `creado DATETIME`.
@@ -218,6 +225,28 @@ a como se creó originalmente.
   agente recomendó agregarla — sistema con datos identificados/sensibles,
   trazabilidad forense barata de hacer ahora y cara de reconstruir después;
   el usuario confirmó la recomendación.
+
+### 1.12 `categoriaModel.php` (nuevo, Pasada 6)
+Sólo lectura: `by_id`, `por_guia($guiaId)`. **Por qué mínimo:** el motor de
+calificación no lo necesita (usa `reactivo.categoria_id` denormalizado);
+existe para nombrar renglones de reportes futuros, como pide el handoff §5.1.
+
+### 1.13 `dominioModel.php` (nuevo, Pasada 6)
+Igual que 1.12 pero para dominios: `by_id`, `por_categoria($categoriaId)`.
+
+### 1.14 `umbralModel.php` (nuevo, Pasada 6)
+`nivel_final($guiaId, $calificacion)`, `nivel_categoria($categoriaId, $calificacion)`,
+`nivel_dominio($dominioId, $calificacion)` — los tres delegan en un método
+privado compartido (`buscar_nivel()`) para no repetir 3 veces la misma
+consulta con sólo el nombre de columna distinto. Es la única fuente de
+verdad de la traducción calificación→nivel de riesgo; nadie más en el
+código debe reconstruir esos rangos.
+
+### 1.15 `resultadoDetalleModel.php` (nuevo, Pasada 6)
+CRUD mínimo: `insertOne`, `by_id`, `por_resultado($resultadoId)`. **Nota:**
+`resultadoModel::calcular_para_aplicacion()` NO usa `insertOne()` de este
+modelo dentro de su transacción manual — ver 1.9 y sección 12.2 para el
+porqué (usaría `transaction=true` por default y comitearía a medio camino).
 
 ---
 
@@ -494,12 +523,15 @@ Esto **no** se hizo a propósito, no es un olvido:
   explícitamente "sin lógica de negocio todavía" en la Pasada 1 y "sigue
   siendo hardening + documentación, sin lógica de calificación todavía" en
   las pasadas 2 y 3.
-- No se crearon los 6 modelos para `categoria`, `dominio`, `dimension`,
-  `pregunta_filtro`, `umbral`, `resultado_detalle` (el usuario dijo
-  explícitamente "no, por ahora solo el reporte" en la Pasada 3, y se
-  reconfirmó en la Pasada 4) — **son la dependencia inmediata del seed del
-  instrumento**, que es el siguiente paso natural del proyecto (ver
-  `ARQUITECTURA.md` sección 10.3).
+- ~~No se crearon los 6 modelos para `categoria`, `dominio`, `dimension`,
+  `pregunta_filtro`, `umbral`, `resultado_detalle`~~ — **4 de 6 creados en
+  la Pasada 6** (`categoriaModel`, `dominioModel`, `umbralModel`,
+  `resultadoDetalleModel`, ver sección 12.1), porque el handoff de
+  Desarrollo los pidió como parte de la primera tarea (motor de
+  calificación). Siguen sin modelo `dimensionModel` y `preguntaFiltroModel`
+  — no los necesitó el motor de cálculo (usa `reactivo.dimension_id`/
+  `pregunta_filtro_id` directamente); se crearán cuando haga falta nombrar
+  esos niveles en algún reporte.
 - ~~No se resolvió el límite de trabajadores de la Guía II (15 vs 16)~~ —
   **resuelto en la Pasada 4:** es 16, confirmado contra el texto oficial de
   la norma; el caso ≤15 ("no requiere cuestionario") quedó documentado.
@@ -585,25 +617,141 @@ consumen **actuaran** sobre ese `null` en vez de sólo tener un comentario
 
 ---
 
-## 12. Restricciones respetadas en las 5 pasadas
+## 12. Pasada 6 — motor de calificación (2026-09-21)
+
+Primera tarea de desarrollo real marcada por `docs/HANDOFF_DESARROLLO.md`
+§5. Es la primera pasada que agrega **lógica de negocio** (las 5 anteriores
+fueron explícitamente "sin lógica de calificación"). Antes de tocar código
+se leyó el handoff completo y, en el orden que indica su §2, los 5
+documentos que referencia — más una verificación **en vivo contra
+`db_beeframework`** (no sólo contra los documentos): se confirmó que el
+seed ya estaba cargado exactamente como decía el handoff (2 guías, 9
+categorías, 18 dominios, 45 dimensiones, 4 filtros, 118 reactivos, 145
+umbrales) y se detectó que el diagrama ER de
+`docs/Modelo_ER_Cuestionario_NOM-035.md` está desactualizado en 2 puntos
+(un `usuario.centro_trabajo_id` que no existe, y un `umbral.referencia_id`
+polimórfico que en el DDL real son `categoria_id`/`dominio_id` separados) —
+se usó el DDL real, no el diagrama, como indica el propio handoff ("si algo no coincide, gana el DDL"). También se confirmó que
+`docs/norma/Transcripcion_GuiaII_NOM-035.md` (referenciado por el handoff)
+no existe en el repo; se compensó cruzando la polaridad y los umbrales de
+Guía II directamente contra la BD sembrada, que coincidieron con el resumen
+de `Modelo_ER.md` §5.1 y §5.3.
+
+### 12.1 Modelos nuevos
+
+- **`categoriaModel.php`, `dominioModel.php`** — sólo lectura (`by_id`,
+  `por_guia`/`por_categoria`). **Por qué mínimos:** el motor de cálculo usa
+  `reactivo.dominio_id`/`categoria_id` ya denormalizados (ver 1.6), no
+  necesita iterar el árbol categoria→dominio; estos modelos son para
+  nombrar renglones en reportes futuros, no los usa `calcular_para_aplicacion()`.
+- **`umbralModel.php`** — `nivel_final()`, `nivel_categoria()`,
+  `nivel_dominio()`, los tres sobre una sola implementación privada
+  (`buscar_nivel()`) con la convención `limite_inferior <= valor < limite_superior`
+  (confirmada en `Modelo_ER.md` §5.3 y contra las filas reales de la BD).
+  **Por qué un método privado compartido:** evitar tres copias de la misma
+  lógica de rango con sólo el nombre de columna distinto.
+- **`resultadoDetalleModel.php`** — `insertOne`, `by_id`, `por_resultado()`.
+
+### 12.2 `resultadoModel.php` — `calcular_para_aplicacion()` implementado
+
+Antes era un stub que regresaba `null` con un TODO. Ahora calcula de verdad:
+respuestaModel::por_aplicacion() + reactivoModel::calcular_puntaje()
+(**ninguno de los dos se tocó** — ya traían exactamente lo que el algoritmo
+necesitaba, construidos así desde la Pasada 3) → suma en PHP por
+dominio/categoría/total → `umbralModel` → persiste en `resultado` +
+`resultado_detalle`.
+
+**Hallazgo real durante la implementación (no en los documentos, se
+descubrió corriendo el código):** `Db::query()` (`app/classes/Db.php`,
+núcleo, no se modifica) hace auto-commit con las opciones por default, pero
+su rama `SELECT` hace `return` **antes** de llegar al `commit()` — o sea,
+cualquier `SELECT` por default dentro de una misma ejecución de PHP deja la
+conexión con una transacción abierta sin cerrar. Es invisible en el resto
+del sistema (cada request de Bee es de corta vida). Se volvió visible aquí
+porque `calcular_para_aplicacion()` hace varias lecturas por default antes
+de necesitar controlar su propia transacción — al intentar
+`$link->beginTransaction()` explícito, PDO tiraba
+`PDOException: There is already an active transaction`. **Se corrigió
+dentro de `resultadoModel`, sin tocar `Db.php`:** si `$link->inTransaction()`
+es verdadero justo antes de empezar, se cierra esa transacción colgada
+(`commit()` — no hay nada que perder, sólo fueron lecturas) y entonces sí
+se abre la transacción real que el método controla explícitamente
+(`Db::connect()->beginTransaction()`/`commit()`/`rollBack()`, con
+`['transaction' => false]` en cada `Model::query()` individual para que no
+vuelvan a auto-comitear a medio camino). Documentado en un comentario
+extenso en el propio método para que nadie lo "arregle" pensando que es
+código de más.
+
+**Idempotencia:** se borra el `resultado` previo de la aplicación antes de
+insertar (`ON DELETE CASCADE` de `resultado_detalle`, ya en `ddl.sql`, se
+encarga del desglose viejo) — reemplaza, no duplica. Verificado
+corriendo el cálculo dos veces sobre la misma aplicación (ver 12.3).
+
+### 12.3 `scripts/verificar_motor_calificacion.php` (nuevo)
+
+Script standalone por CLI, **no** es parte de la app (no agrega rutas ni
+controladores). Arranca el mínimo del framework que necesitan los modelos
+(config, autoloader, funciones) sin pasar por `Bee::fly()` (que despacharía
+un controlador HTTP); simula `$_SERVER['REMOTE_ADDR']` para que
+`bee_config.php::IS_LOCAL` tome las credenciales `LDB_*` en vez de las de
+producción (vacías) — sin esto, `IS_LOCAL` sale `false` en CLI porque
+`$_SERVER['REMOTE_ADDR']` no existe fuera de una petición HTTP real.
+
+Para cada guía (GRII, GRIII) crea una cadena de datos real
+(`secretaria`→`centro_trabajo`→`token`→`aplicacion`→`respuesta`) y corre 3
+casos (todo "Siempre", todo "Nunca", filtros en "No") comparando contra un
+valor esperado calculado por fórmula desde el conteo real de polaridad en
+la BD — no hardcodeado. Al final borra todo lo que insertó, en un bloque
+`finally`, para poder correrse las veces que haga falta sin ensuciar la
+base de datos.
+
+**Corrida real (2026-09-21):** 0 fallos — calificación final y cada
+renglón de dominio/categoría exactos en ambas guías, idempotencia
+confirmada (recalcular no duplica), exclusión de reactivos condicionales
+confirmada, ningún nivel de riesgo `null`. Se confirmó además que las 8
+tablas operativas quedaron en 0 filas tras la limpieza (estado idéntico al
+inicial).
+
+### 12.4 `guiaModel.php` — `nivel_de_riesgo()` implementado
+
+Era un TODO que esperaba a que existiera `umbralModel`. Ahora es un
+delegador de conveniencia hacia los tres métodos de `umbralModel` según
+`$nivelAgregacion` — así `resultadoModel` no tiene que decidir cuál de los
+tres invocar en cada caso (aunque en la práctica `calcular_para_aplicacion()`
+sí llama a los tres métodos de `umbralModel` directamente, por claridad).
+También se limpiaron las 2 referencias a "`umbralModel` — pendiente de
+scaffolding" del docblock de la clase, que ya no aplican.
+
+### 12.5 `docs/ARQUITECTURA.md` — sección 13 agregada
+
+Documenta todo lo de 12.1–12.4 con más detalle técnico (el algoritmo
+completo, el hallazgo de `Db::query()`, y qué queda fuera de esta tarea:
+conectar `cuestionarioController::post_responder()` al motor, y la UI de
+reportes — ambos explícitamente fuera de alcance del handoff).
+
+---
+
+## 13. Restricciones respetadas en las 6 pasadas
 
 - **Cero comandos de Git ejecutados por Claude.** Cuando el usuario pidió
   los 6 commits segmentados, Claude entregó los comandos como texto para que
   el usuario los corriera él mismo; nunca se invocó `git commit`/`git add`
   desde una herramienta de Claude.
-- **Cero archivos de `app/classes/*` modificados.** Todo lo agregado usa las
-  clases del núcleo tal cual existen (`Controller`, `Model`, `Auth`, `Csrf`,
-  `Flasher`, `Redirect`, `PaginationHandler`, `BeePdf`, etc.), nunca se
-  editó su código fuente.
-- **Los dos únicos archivos "existentes" que se modificaron** fueron los que
-  el propio Bee reserva para el proyecto: `app/functions/bee_custom_functions.php`
-  y `templates/includes/styles.php` (secciones 4 y 5).
-- **`docs/DDL/ddl.sql`** se modificó dos veces (Pasada 3 y Pasada 4); en la
-  Pasada 5 se leyó como fuente de verdad pero **no** se volvió a tocar,
-  porque ya cumplía lo pedido. Ambas modificaciones previas se hicieron con
-  autorización explícita pedida antes de aplicar el cambio (sección 7).
+- **Cero archivos de `app/classes/*` modificados** — ni siquiera para el
+  hallazgo de `Db::query()` de la Pasada 6 (sección 12.2), que se resolvió
+  enteramente dentro de `resultadoModel.php`.
+- **Los dos únicos archivos "existentes" del núcleo/framework que se
+  modificaron** siguen siendo los que Bee reserva para el proyecto:
+  `app/functions/bee_custom_functions.php` y `templates/includes/styles.php`
+  (secciones 4 y 5). La Pasada 6 no agregó un tercero: `scripts/` es una
+  carpeta nueva, fuera de `app/` y `templates/`, sin rutas ni controlador.
+- **`docs/DDL/ddl.sql`** se modificó dos veces (Pasada 3 y Pasada 4), con
+  autorización explícita en ambas. En la Pasada 6 se leyó como fuente de
+  verdad del esquema y **no** se tocó — todo lo que necesitaba ya estaba.
 - **`Planificacion_Proyecto_Cuestionario_NOM-035 (1-2).md`** se tocó por
   primera vez en la Pasada 4 (3 líneas: el límite de la Guía II y RF-00),
   también para corregir un dato que el segundo agente confirmó como
   erróneo contra el texto oficial de la norma — no por iniciativa unilateral
   de Claude sin respaldo.
+- **`php -l` en cada archivo tocado, en cada pasada, incluida ésta** (6
+  modelos + 1 script).

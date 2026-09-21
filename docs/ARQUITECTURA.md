@@ -491,3 +491,118 @@ seguir de largo:
   condiciones normales nunca debería activarse aquí (el guard de arriba ya
   impide crear esos centros de trabajo), pero cubre el caso de datos
   cargados directo en la base de datos sin pasar por el administrador.
+
+---
+
+## 13. Motor de calificación (2026-09-21)
+
+Primera tarea de desarrollo real (`docs/HANDOFF_DESARROLLO.md` §5), sobre un
+esquema ya sembrado y verificado en `db_beeframework` (2 guías, 9 categorías,
+18 dominios, 45 dimensiones, 4 preguntas-filtro, 118 reactivos, 145 umbrales
+— conteo confirmado en vivo contra la BD, no sólo contra el DDL). Con esto
+queda **implementada de verdad** la lógica de cálculo; hasta ahora todo el
+esqueleto sólo tenía placeholders.
+
+### 13.1 Modelos nuevos
+
+- **`categoriaModel`** y **`dominioModel`** — sólo lectura (`by_id`,
+  `por_guia`/`por_categoria`). El motor de cálculo no los necesita para
+  calcular (usa `reactivo.dominio_id`/`categoria_id` denormalizados, ver
+  §3), son para nombrar renglones en reportes futuros.
+- **`umbralModel`** — traduce una calificación a nivel de riesgo. Tres
+  métodos públicos (`nivel_final`, `nivel_categoria`, `nivel_dominio`) sobre
+  una sola implementación privada (`buscar_nivel()`) que aplica la
+  convención `limite_inferior <= valor < limite_superior`. Es la única
+  fuente de verdad de esta traducción — no se duplican los rangos en
+  ningún otro lugar del código.
+- **`resultadoDetalleModel`** — CRUD mínimo sobre la tabla hija de
+  `resultado` (`insertOne`, `by_id`, `por_resultado`).
+
+### 13.2 `resultadoModel::calcular_para_aplicacion($aplicacionId)`
+
+Ya implementado (antes era un stub que regresaba `null`). Algoritmo (ver
+también el docblock del método, que es la referencia más detallada):
+
+1. `respuestaModel::por_aplicacion()` trae cada respuesta con su reactivo y
+   su opción ya unidos (`polaridad`, `dominio_id`, `categoria_id`,
+   `posicion`) — no hizo falta tocar ese método, ya traía justo lo necesario.
+2. `reactivoModel::calcular_puntaje()` da el puntaje de cada respuesta
+   (tampoco se tocó).
+3. Suma en PHP (no en SQL) por dominio, por categoría y el total. Un
+   reactivo omitido por un filtro simplemente no tiene fila en `respuesta`,
+   así que no aporta a ninguna suma.
+4. `umbralModel` traduce cada suma a nivel de riesgo.
+5. Persistencia **atómica e idempotente**.
+
+**Sobre la atomicidad — un hallazgo importante en el núcleo de Bee (sin
+modificarlo):** `Db::query()` (`app/classes/Db.php`) hace auto-commit por
+query cuando se le llama con las opciones por default (abre transacción,
+ejecuta, cierra transacción) — pero su rama para `SELECT` hace `return`
+**antes** de llegar al `commit()`, así que *cualquier* `SELECT` con opciones
+por default deja la conexión con una transacción abierta sin cerrar. Esto
+es invisible en el resto del sistema (cada request de Bee es de corta vida,
+y la siguiente escritura por default termina cerrándola sin que nadie note
+nada raro), pero se vuelve un problema real en cuanto un mismo método
+necesita controlar su propia transacción de varias sentencias — como aquí.
+`calcular_para_aplicacion()` ya hizo varias lecturas por default antes de
+llegar a la parte de escritura (`aplicacionModel::by_id()`,
+`respuestaModel::por_aplicacion()`, los `umbralModel::nivel_*()`), así que
+al llegar ahí la conexión puede estar "en transacción" sin que el método
+lo haya pedido. Se resuelve **dentro de `resultadoModel`, sin tocar
+`Db.php`**: si `$link->inTransaction()` es verdadero antes de empezar, se
+hace `commit()` de esa transacción colgada (no hay nada que perder, sólo
+fueron lecturas) y luego sí se abre la transacción real que el método
+controla explícitamente (`Db::connect()->beginTransaction()`/`commit()`/
+`rollBack()`, con `['transaction' => false]` en cada `Model::query()`
+individual para que no vuelvan a auto-comitear a medio camino).
+
+**Idempotencia:** antes de insertar, se borra cualquier `resultado` previo
+de la misma aplicación (`DELETE FROM resultado WHERE aplicacion_id=...`) —
+el `ON DELETE CASCADE` de `resultado_detalle` (ya definido en `ddl.sql`) se
+lleva su desglose viejo solo. Recalcular reemplaza, nunca duplica.
+
+### 13.3 Verificación (`scripts/verificar_motor_calificacion.php`)
+
+Script standalone (no es parte de la app, no agrega rutas ni controladores)
+que se ejecuta por CLI (`php scripts/verificar_motor_calificacion.php`).
+Arranca el mínimo del framework que necesitan los modelos (config,
+autoloader, funciones) **sin** pasar por `Bee::fly()` (que despacharía un
+controlador HTTP, no aplica en CLI); simula `$_SERVER['REMOTE_ADDR']` para
+que `IS_LOCAL` tome las credenciales `LDB_*` correctamente.
+
+Para cada guía (GRII y GRIII) crea una cadena de datos real y mínima
+(`secretaria`→`centro_trabajo`→`token`→`aplicacion`→`respuesta`) y corre 3
+casos, comparando siempre contra un valor esperado calculado por fórmula a
+partir del conteo real de polaridad en la BD (no a mano con calculadora,
+ni hardcodeado):
+
+1. **Todo "Siempre", filtros en "Sí"** — verifica la calificación final Y
+   cada renglón de dominio/categoría individualmente, más una recalculación
+   inmediata para confirmar idempotencia (mismo número de renglones de
+   detalle, no duplicados).
+2. **Todo "Nunca", filtros en "Sí"** — caso inverso de polaridad.
+3. **Filtros en "No"** (sólo reactivos obligatorios) — confirma que los
+   reactivos condicionales (41–46/44–46 GRII, 65–68/69–72 GRIII) no suman.
+
+Al final borra todo lo que insertó (`aplicacion` en cascada se lleva
+`respuesta` + `resultado` + `resultado_detalle`; luego `token`,
+`centro_trabajo`, `secretaria`), en un bloque `finally` para que corra
+aunque alguna verificación falle — se puede ejecutar las veces que haga
+falta sin dejar basura en la base de datos.
+
+**Resultado de la corrida (2026-09-21):** 0 fallos, ambas guías, las 3
+familias de caso, idempotencia confirmada, ningún nivel de riesgo `null`
+(ninguna calificación cayó fuera de los rangos de `umbral`). Verificado
+también que la limpieza dejó las 8 tablas operativas en 0 filas de nuevo.
+
+### 13.4 Lo que falta (fuera de esta tarea)
+
+- Wiring real de `cuestionarioController::post_responder()` para llamar
+  `resultadoModel::calcular_para_aplicacion()` al enviar el cuestionario
+  (RNF-06, cálculo en tiempo real) — sigue como `TODO`, es la "segunda
+  tarea" del handoff (módulo de administrador) la que probablemente lo
+  antecede en orden natural.
+- UI de reportes (individual/agregado/tablero) que consuma `resultado` y
+  `resultado_detalle` — explícitamente fuera de alcance en el handoff.
+- `categoriaModel`/`dominioModel` sólo tienen los métodos mínimos usados
+  hasta ahora; se ampliarán cuando los necesite el reporte.
