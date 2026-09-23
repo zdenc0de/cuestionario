@@ -606,3 +606,106 @@ también que la limpieza dejó las 8 tablas operativas en 0 filas de nuevo.
   `resultado_detalle` — explícitamente fuera de alcance en el handoff.
 - `categoriaModel`/`dominioModel` sólo tienen los métodos mínimos usados
   hasta ahora; se ampliarán cuando los necesite el reporte.
+
+---
+
+## 14. Bootstrap del súper usuario y módulo de súper usuario (2026-09-23)
+
+Segunda tarea de desarrollo real (`docs/HANDOFF_DESARROLLO.md` §3-4):
+cuenta raíz + `superusuarioController` funcional.
+
+### 14.1 Bootstrap de la cuenta raíz
+
+**No se inventó ningún hash.** Se usó `get_new_password()`
+(`app/functions/bee_core_functions.php`), que internamente hace
+`password_hash($password . AUTH_SALT, PASSWORD_BCRYPT)` — exactamente la
+misma fórmula que valida `loginController::post_login()`
+(`password_verify($password.AUTH_SALT, $user['password'])`) y la que usa
+`adminController::post_usuarios()` para dar de alta. Es la misma función
+que usa `beeController::generate_user()` para las cuentas de prueba de Bee.
+
+`scripts/generar_bootstrap_superusuario.php` (nuevo, reutilizable) arranca
+el mínimo del framework (mismo patrón que `verificar_motor_calificacion.php`,
+sección 13.3) y genera un bloque SQL con el hash real ya calculado contra el
+`AUTH_SALT` vigente, más las credenciales en texto plano impresas aparte.
+Se corrió una vez y su salida se guardó tal cual en
+`scripts/bootstrap_superusuario.sql` — es el archivo que el usuario ejecuta
+en phpMyAdmin (3 INSERT encadenados con `SET @variable = LAST_INSERT_ID()`:
+`secretaria` → `bee_users` → `usuario` con `rol='superusuario'`).
+
+**Verificación real, no sólo generación:** antes de entregar el SQL se
+verificó el mecanismo completo contra el servidor local (XAMPP Apache +
+MariaDB), con una cuenta de prueba **desechable** (no las credenciales
+reales) creada directamente por SQL con el mismo algoritmo de hash, vía
+`curl` con cookie jar (login real por HTTP, no una llamada directa a
+`Auth::login()`): login exitoso (redirect a `/admin`, cookies persistentes
+`bee__cookie_id`/`bee__cookie_tkn` seteadas por `BeeSession::new_session()`),
+`GET /superusuario` responde 200 (el guard de rol pasa), y — encadenado —
+la creación de un administrador de prueba, su login, y la bitácora, ver 14.2.
+Al final se borraron **todos** los datos de prueba (bitácora incluida) y se
+confirmó que las 9 tablas operativas quedaron en 0 filas de nuevo.
+
+**Incidente durante la verificación (documentado, no oculto):** a media
+prueba, MariaDB se quedó con dos consultas atoradas indefinidamente en
+estado "Opening tables"/"Statistics" sobre `bee_users` y `options` —
+`KILL` no las liberó. No hay evidencia de que lo haya causado el código de
+este proyecto (son un `SELECT ... WHERE id = ?` sobre `bee_users` de
+`BeeSession::authenticate()`, sin modificar, y una consulta a `options` que
+tampoco toca este módulo); tiene toda la pinta de un atoro de MariaDB en
+Windows (frecuente con antivirus interceptando los archivos `.ibd`). Se
+reinició MariaDB y Apache (`taskkill` + los `.bat` de XAMPP) y se confirmó
+que **ningún dato se perdió** (seed del instrumento y datos de prueba
+intactos) antes de continuar. Vale la pena tenerlo en el radar si vuelve a
+pasar durante el desarrollo.
+
+### 14.2 `superusuarioController` — implementado
+
+- **`administradores()`**: `usuarioModel::administradores_por_secretaria()`
+  (ahora con JOIN a `bee_users` para traer `username`/`email`, antes era un
+  TODO) filtrado por `obtener_usuario_actual()['secretaria_id']` — nunca
+  por un id recibido del cliente.
+- **`post_administradores()`**: mismas validaciones que
+  `adminController::post_usuarios()` (regex de username/password, email +
+  `is_temporary_email()`, duplicados contra `bee_users`) copiadas por
+  consistencia, no reinventadas. Crea `bee_users` + enlace en `usuario` con
+  `rol='administrador'` y `secretaria_id` = la del súper usuario en sesión
+  (nunca la del formulario). Si el enlace falla tras crear la cuenta, borra
+  la cuenta huérfana antes de fallar (no deja `bee_users` sin su
+  `usuario` correspondiente). Registra `'alta_administrador'` en la
+  bitácora con `entidad_id` = el id de enlace del nuevo administrador.
+- **`borrar_administrador()`** — **NO hace `DELETE`, revoca el acceso.**
+  Hallazgo real durante la implementación: `auditoria.usuario_id -> usuario.id`
+  es `ON DELETE RESTRICT` a propósito (docs/DDL/ddl.sql) — el historial de
+  auditoría de una cuenta no debe poder desaparecer borrándola. Como la
+  propia alta de un administrador ya dejó una fila de auditoría con el
+  súper usuario como actor, y cualquier acción futura del administrador
+  quedaría igual, un `DELETE` físico de `usuario`/`bee_users` puede chocar
+  con esa restricción en cuanto hay historial — y aunque no la hubiera,
+  borrar la cuenta de alguien que sí actuó destruye el "quién" de esas
+  acciones. La "baja" aquí es: sobrescribir la contraseña con un valor
+  aleatorio que nadie conoce (`get_new_password()`, mismo algoritmo), la
+  cuenta deja de poder iniciar sesión pero su fila y su historial se
+  conservan. Verificado en vivo: el administrador de prueba pudo iniciar
+  sesión antes de la revocación y **no pudo** después (mismo mensaje que
+  credenciales inválidas). **Limitación conocida, documentada en el
+  método:** no hay columna de estado (`activo`) en `usuario`/`bee_users`
+  en el DDL actual, así que un administrador revocado sigue apareciendo en
+  el listado sin marca visual — agregar esa columna requiere tocar
+  `docs/DDL/ddl.sql`, fuera del alcance de esta tarea.
+- **`bitacora()`**: nuevo `auditoriaModel::por_secretaria()` (JOIN
+  `auditoria` → `usuario` → `bee_users`) filtrado por la secretaría del
+  súper usuario en sesión.
+- **Alcance por secretaría, verificado en vivo:** se creó una segunda
+  secretaría de prueba con su propio súper usuario y se confirmó que ve un
+  listado de administradores vacío y una bitácora vacía — no ve nada de la
+  primera secretaría, a pesar de que ambas cuentas conviven en la misma
+  base de datos.
+
+### 14.3 Lo que falta (fuera de esta tarea)
+
+- Columna de estado (`activo`) en `usuario`/`bee_users` para distinguir
+  visualmente a un administrador con el acceso revocado en el listado
+  (ver 14.2) — requiere una decisión de DDL, no se tomó unilateralmente.
+- `editar_administrador()` sigue siendo un stub (no pedido por esta tarea).
+- Módulo de administrador (alta de centros de trabajo, tokens) — "segunda
+  tarea" explícita del handoff §6, para después.

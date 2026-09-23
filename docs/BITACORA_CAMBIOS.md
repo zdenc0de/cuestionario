@@ -1,24 +1,22 @@
 # Bitácora de cambios — Cuestionario NOM-035 (sesiones con Claude)
 
 > Documento de auditoría: enumera **todos** los archivos creados o modificados
-> por el agente Claude en este proyecto hasta el 2026-09-21, en qué momento
-> (de 6 pasadas de trabajo) y **por qué**, para que otro agente/desarrollador
+> por el agente Claude en este proyecto hasta el 2026-09-23, en qué momento
+> (de 7 pasadas de trabajo) y **por qué**, para que otro agente/desarrollador
 > pueda revisarlo contra el código real. No repite la explicación funcional
 > de cada módulo (eso ya está en `docs/ARQUITECTURA.md`); aquí el foco es
 > **el cambio puntual y su justificación**.
 >
 > Contexto de repositorio en el momento de escribir esto: rama `main`, HEAD
-> en `9ca9368` ("feat(docs): add initial handoff document for NOM-035
-> project" — `docs/HANDOFF_DESARROLLO.md`, no es de Claude). Las pasadas 1–5
-> y el ajuste de `DEFAULT_CONTROLLER` ya están commiteados (hasta
-> `f6ee735`/`ebe6efd`). La Pasada 6 (este documento) está en el working
-> tree, sin commitear todavía. Claude no ejecutó ningún comando de Git en
-> ningún momento; los commits fueron corridos por el usuario con comandos
-> que Claude únicamente redactó como texto.
+> en `2972f9d` ("docs: documenta el motor de calificacion (Pasada 6)"). La
+> Pasada 7 (este documento) está en el working tree, sin commitear todavía.
+> Claude no ejecutó ningún comando de Git en ningún momento; los commits
+> fueron corridos por el usuario con comandos que Claude únicamente redactó
+> como texto.
 
 ---
 
-## 0. Las 6 pasadas de trabajo
+## 0. Las 7 pasadas de trabajo
 
 | Pasada | Disparador | Qué produjo |
 |---|---|---|
@@ -28,6 +26,7 @@
 | **4. Segunda revisión** | Un segundo agente revisó la Pasada 3 y propuso 4 ajustes antes de commitear | Límite de Guía II resuelto (16, con el caso ≤15 documentado), columna `ip` agregada a `auditoria`, nota sobre `secretaria.logo`, refuerzo de la dependencia hacia los 6 modelos faltantes. |
 | **5. Ajustes puntuales** | Prompt de "mi agente": afinar la captura de `ip` y agregar el guard funcional de ≤15 trabajadores | `registrar_auditoria()` deja de usar `get_user_ip()` (confía en cabeceras falsificables) y usa `$_SERVER['REMOTE_ADDR']`; guard real en `administradorController::post_centros_trabajo()`; TODO detallado del mismo guard en `cuestionarioController::post_acceso()`; sección 11 de `ARQUITECTURA.md`. |
 | **6. Motor de calificación** | `docs/HANDOFF_DESARROLLO.md` §5 — primera tarea de desarrollo real | 4 modelos nuevos (`categoriaModel`, `dominioModel`, `umbralModel`, `resultadoDetalleModel`), `resultadoModel::calcular_para_aplicacion()` implementado de verdad (ya no es un stub), script de verificación, corrida y confirmada contra la BD real (0 fallos), sección 13 de `ARQUITECTURA.md`. |
+| **7. Súper usuario** | `docs/HANDOFF_DESARROLLO.md` §3-4 — segunda tarea: cuenta raíz + módulo de súper usuario | Bootstrap SQL real (`scripts/bootstrap_superusuario.sql`, hash calculado con la fórmula real de Bee) + generador reutilizable; `superusuarioController` implementado (alta/listado de administradores, revocación, bitácora, alcance por secretaría); todo verificado con `curl` contra el servidor local real, no sólo con `php -l`. Sección 14 de `ARQUITECTURA.md`. |
 
 En las 6 pasadas se respetaron las mismas restricciones: **no** se ejecutó
 Git, **no** se modificó ningún archivo de `app/classes/*` (núcleo de Bee), y
@@ -70,6 +69,10 @@ a como se creó originalmente.
   define `docs/DDL/ddl.sql` (la tabla `usuario` no tiene columna
   `centro_trabajo_id`); además se agregó una nota sobre el choque de tipos
   `bee_user_id` (ver sección 8) que en ese momento aún no se había corregido.
+- **Pasada 7:** `administradores_por_secretaria()` se le agregó el JOIN a
+  `bee_users` que tenía pendiente desde la Pasada 1 (`username`/`email` no
+  vivían en esta tabla) — es lo que consume
+  `superusuarioController::administradores()` para el listado real.
 
 ### 1.3 `centroTrabajoModel.php`
 - **Pasada 1:** creado con `guia_id` como columna propuesta y
@@ -225,6 +228,11 @@ a como se creó originalmente.
   agente recomendó agregarla — sistema con datos identificados/sensibles,
   trazabilidad forense barata de hacer ahora y cara de reconstruir después;
   el usuario confirmó la recomendación.
+- **Pasada 7:** se agregó `por_secretaria($secretariaId)` (JOIN `auditoria`
+  → `usuario` → `bee_users`) — **por qué:** `superusuarioController::bitacora()`
+  necesita mostrar "quién" (el `username`) y filtrar por la secretaría del
+  súper usuario en sesión, no toda la bitácora del sistema (alcance por
+  secretaría).
 
 ### 1.12 `categoriaModel.php` (nuevo, Pasada 6)
 Sólo lectura: `by_id`, `por_guia($guiaId)`. **Por qué mínimo:** el motor de
@@ -316,6 +324,12 @@ porqué (usaría `transaction=true` por default y comitearía a medio camino).
   (único método `post_*` real; `borrar_administrador()` se dejó con el
   patrón GET + CSRF por query string, misma razón que en 2.2).
 - **Pasada 3:** sin cambios de código.
+- **Pasada 7:** implementación real de `administradores()`, `post_administradores()`,
+  `borrar_administrador()` y `bitacora()` (ver sección 13.2 para el detalle
+  completo, incluido el hallazgo de `ON DELETE RESTRICT` que cambió
+  `borrar_administrador()` de "borrar" a "revocar"). `editar_administrador()`
+  queda igual, no era parte de esta tarea. Verificado end-to-end con `curl`
+  contra el servidor local (sección 13.3), no sólo con `php -l`.
 - **Nota aparte (no relacionada con Claude):** el usuario detectó una copia
   accidental de este archivo en `docs/superusuarioController.php` (agregada
   en el commit `e73100a`, probablemente por un `git add` demasiado amplio) y
@@ -366,6 +380,16 @@ completo después; los únicos ajustes fueron:
   cuestionario". **Por qué:** con el límite ya confirmado en 16, un centro de
   15 trabajadores o menos es un dato **válido** (sólo que exento de
   cuestionario) y no debía bloquearse en el formulario.
+- **`superusuario/administradoresView.php`** (Pasada 7): la tabla dejó de
+  mostrar "Sin registros (pendiente)" fijo — ahora hace `foreach` real sobre
+  `$d->administradores` (username, email, alta) y agrega el enlace "Revocar
+  acceso" (patrón GET + `CSRF_TOKEN` en query string, igual que
+  `adminController::borrar_usuario()`). Se quitó la columna "Centros de
+  trabajo" que había quedado como suposición en la Pasada 1 — el método del
+  modelo no regresa ese dato y no se pidió en esta tarea.
+- **`superusuario/bitacoraView.php`** (Pasada 7): mismo cambio — `foreach`
+  real sobre `$d->bitacora` (usuario, acción, entidad + `entidad_id`,
+  detalle, IP, fecha) en vez del placeholder.
 
 ---
 
@@ -731,7 +755,105 @@ reportes — ambos explícitamente fuera de alcance del handoff).
 
 ---
 
-## 13. Restricciones respetadas en las 6 pasadas
+## 13. Pasada 7 — bootstrap y módulo de súper usuario (2026-09-23)
+
+Segunda tarea de desarrollo real (`docs/HANDOFF_DESARROLLO.md` §3-4).
+Antes de tocar código se releyeron las secciones 3 y 4 del handoff, y se
+leyó específicamente cómo Bee crea/valida contraseñas (`app/classes/Auth.php`,
+`loginController.php`, `beeController::password()`/`generate_user()`,
+`get_new_password()` en `bee_core_functions.php`) para no inventar el hash,
+tal como pedía el prompt.
+
+### 13.1 Bootstrap de la cuenta raíz (nuevo)
+
+- **`scripts/generar_bootstrap_superusuario.php`** (nuevo, CLI, reutilizable):
+  arranca el framework igual que `verificar_motor_calificacion.php`
+  (Pasada 6) y llama a `get_new_password()` — la MISMA función que usa
+  `beeController::generate_user()`, que a su vez hace
+  `password_hash($password . AUTH_SALT, PASSWORD_BCRYPT)`, exactamente lo
+  que valida `loginController::post_login()`. **Por qué reutilizarla en vez
+  de escribir `password_hash()` a mano:** el prompt lo pedía explícitamente
+  ("no inventes el hash"), y usar la función real de Bee garantiza cero
+  desviación del algoritmo aunque cambie en el futuro.
+- **`scripts/bootstrap_superusuario.sql`** (nuevo): la salida real de correr
+  el generador una vez — 3 `INSERT` encadenados (`secretaria` → `bee_users`
+  → `usuario` con `rol='superusuario'`) usando `SET @variable = LAST_INSERT_ID()`
+  para encadenar los ids sin depender de saber los autoincrementos de
+  antemano. Es el archivo que el usuario corre en phpMyAdmin — Claude
+  **no** insertó estas filas reales en la BD del usuario (ver 13.3).
+
+### 13.2 `superusuarioController.php` — de stubs a funcional
+
+- **`administradores()`**: ya no es TODO — usa
+  `usuarioModel::administradores_por_secretaria()` filtrado por la
+  secretaría del súper usuario en sesión.
+- **`post_administradores()`**: crea `bee_users` + enlace `usuario`
+  (`rol='administrador'`). Copia las validaciones de
+  `adminController::post_usuarios()` (regex username/password, email +
+  `is_temporary_email()`, duplicados) — **por qué copiarlas en vez de
+  reinventar:** consistencia con el resto del sistema, ya estaban probadas.
+  Registra `'alta_administrador'` en la bitácora.
+- **`borrar_administrador()`**: hallazgo real (no documentado en ningún
+  archivo previo) al implementarlo — `auditoria.usuario_id -> usuario.id`
+  es `ON DELETE RESTRICT` a propósito, así que un `DELETE` físico de la
+  cuenta de un administrador puede chocar con su propio historial de
+  auditoría (que existe desde el momento en que se le da de alta). Se
+  cambió el diseño sobre la marcha: "baja" = revocar el acceso
+  (sobrescribir la contraseña con un valor aleatorio descartado, vía
+  `get_new_password()`), no borrar filas — preserva la bitácora intacta.
+  Documentado extensamente en el docblock del método, incluida la
+  limitación conocida (sin columna `activo`, un administrador revocado
+  sigue apareciendo en el listado).
+- **`bitacora()`**: nuevo `auditoriaModel::por_secretaria()`.
+- **`usuarioModel::administradores_por_secretaria()`**: se le agregó el
+  JOIN a `bee_users` que tenía pendiente desde la Pasada 1 (comentario
+  "TODO: implementar join... para obtener username/email").
+
+### 13.3 Verificación real contra el servidor local (no sólo `php -l`)
+
+A diferencia de las pasadas anteriores (que verificaban con scripts PHP en
+CLI), aquí hacía falta probar sesiones/cookies reales — se usó `curl` con
+cookie jar contra el Apache/MariaDB de XAMPP ya corriendo, con datos de
+prueba **desechables** (nombres `__test_*`, nunca las credenciales del
+bootstrap real):
+
+1. Se insertó por SQL directo una secretaría + súper usuario de prueba (con
+   hash calculado igual que el generador).
+2. Login real por HTTP (`POST /login/post_login` con CSRF extraído del
+   formulario) → 302 a `/admin`, cookies persistentes
+   `bee__cookie_id`/`bee__cookie_tkn` seteadas por `BeeSession::new_session()`.
+3. `GET /superusuario` → 200 (el guard de rol pasa).
+4. `POST /superusuario/post_administradores` real (formulario completo) →
+   creó un administrador de prueba de verdad en la BD.
+5. Login de ese administrador de prueba → 302 a `/admin`; `GET /administrador`
+   → 200; `GET /superusuario` con su sesión → rechazado y redirigido (el
+   guard de rol también bloquea en el sentido contrario).
+6. `GET /superusuario/bitacora` → mostró la fila `alta_administrador` real,
+   con el `username` correcto vía el JOIN nuevo.
+7. `GET /superusuario/borrar_administrador/{id}?_t=...` → tras esto, el
+   administrador de prueba **ya no pudo iniciar sesión** (mismo mensaje que
+   credenciales inválidas) — confirma que la revocación (13.2) funciona.
+8. Alcance por secretaría: se creó una SEGUNDA secretaría + súper usuario
+   de prueba y se confirmó que ve listado de administradores y bitácora
+   **vacíos** — no ve nada de la primera secretaría.
+9. Limpieza total: se borraron las filas de `auditoria` (actor = el súper
+   usuario de prueba, había que borrarlas primero por el mismo `ON DELETE
+   RESTRICT` de 13.2), luego `usuario`, `bee_users` y `secretaria` de
+   prueba. Confirmado con `SELECT COUNT(*)`: las 9 tablas operativas
+   quedaron en 0 filas, igual que antes de empezar.
+
+**Incidente durante la verificación (documentado, no oculto):** a media
+prueba MariaDB se atoró (dos consultas — un `SELECT` a `bee_users` de
+`BeeSession::authenticate()` sin modificar, y una a `options` que este
+módulo no toca — quedaron indefinidamente en "Opening tables"/"Statistics";
+`KILL` no las liberó). No hay indicio de que lo causara código de este
+proyecto. Se reinició MariaDB y Apache (`taskkill` + los `.bat` de XAMPP) y
+se confirmó que ningún dato se perdió (seed del instrumento: 2/9/18/45/4/118/5/145
+intacto) antes de continuar la verificación donde se había quedado.
+
+---
+
+## 14. Restricciones respetadas en las 7 pasadas
 
 - **Cero comandos de Git ejecutados por Claude.** Cuando el usuario pidió
   los 6 commits segmentados, Claude entregó los comandos como texto para que
@@ -743,15 +865,30 @@ reportes — ambos explícitamente fuera de alcance del handoff).
 - **Los dos únicos archivos "existentes" del núcleo/framework que se
   modificaron** siguen siendo los que Bee reserva para el proyecto:
   `app/functions/bee_custom_functions.php` y `templates/includes/styles.php`
-  (secciones 4 y 5). La Pasada 6 no agregó un tercero: `scripts/` es una
-  carpeta nueva, fuera de `app/` y `templates/`, sin rutas ni controlador.
+  (secciones 4 y 5). Las pasadas 6 y 7 no agregaron un tercero: `scripts/`
+  es una carpeta nueva, fuera de `app/` y `templates/`, sin rutas ni
+  controlador propio.
 - **`docs/DDL/ddl.sql`** se modificó dos veces (Pasada 3 y Pasada 4), con
-  autorización explícita en ambas. En la Pasada 6 se leyó como fuente de
-  verdad del esquema y **no** se tocó — todo lo que necesitaba ya estaba.
+  autorización explícita en ambas. En las pasadas 6 y 7 se leyó como fuente
+  de verdad del esquema y **no** se tocó — todo lo que necesitaban ya estaba
+  (incluido el hallazgo de `ON DELETE RESTRICT` en `auditoria.usuario_id`
+  de la Pasada 7, que se resolvió cambiando el diseño de la aplicación, no
+  el esquema).
 - **`Planificacion_Proyecto_Cuestionario_NOM-035 (1-2).md`** se tocó por
   primera vez en la Pasada 4 (3 líneas: el límite de la Guía II y RF-00),
   también para corregir un dato que el segundo agente confirmó como
   erróneo contra el texto oficial de la norma — no por iniciativa unilateral
   de Claude sin respaldo.
-- **`php -l` en cada archivo tocado, en cada pasada, incluida ésta** (6
-  modelos + 1 script).
+- **`php -l` en cada archivo tocado, en cada pasada, incluida ésta** (2
+  modelos, 1 controlador, 2 vistas, 2 scripts en la Pasada 7).
+- **La Pasada 7 sí insertó y borró datos reales en la BD del usuario**
+  (datos de prueba desechables, para la verificación por `curl` de 13.3) —
+  pero **no** dejó nada permanente: se confirmó con `SELECT COUNT(*)` que
+  las tablas operativas quedaron en 0 filas al terminar, igual que al
+  empezar. Las credenciales reales del bootstrap (13.1) se entregan como
+  SQL para que el usuario las aplique él mismo, tal como pidió — Claude no
+  las insertó en la base de datos del usuario.
+- **Se reinició MariaDB y Apache localmente** durante la Pasada 7 (13.3,
+  incidente) — acción de infraestructura local de desarrollo, no
+  destructiva (se confirmó integridad de datos antes/después), no
+  relacionada con Git ni con el código del proyecto.
