@@ -108,6 +108,45 @@ class reactivoModel extends Model {
   }
 
   /**
+   * Igual que obligatorios_por_guia(), pero además trae el nombre de la
+   * categoría (JOIN) — insumo directo para agrupar visualmente las preguntas
+   * en cuestionarioController::responder()/templates/views/cuestionario/cuestionarioView.php.
+   *
+   * @param mixed $guiaId
+   * @return array
+   */
+  static function obligatorios_por_guia_con_categoria($guiaId)
+  {
+    $sql =
+      'SELECT rc.*, c.nombre AS categoria_nombre
+       FROM %s rc
+       INNER JOIN categoria c ON c.id = rc.categoria_id
+       WHERE rc.guia_id = :guia_id AND rc.pregunta_filtro_id IS NULL
+       ORDER BY rc.numero ASC';
+    $sql = sprintf($sql, self::$t1);
+    return ($rows = parent::query($sql, ['guia_id' => $guiaId])) ? $rows : [];
+  }
+
+  /**
+   * Igual que condicionales_por_filtro(), pero además trae el nombre de la
+   * categoría (JOIN), mismo criterio que obligatorios_por_guia_con_categoria().
+   *
+   * @param mixed $preguntaFiltroId
+   * @return array
+   */
+  static function condicionales_por_filtro_con_categoria($preguntaFiltroId)
+  {
+    $sql =
+      'SELECT rc.*, c.nombre AS categoria_nombre
+       FROM %s rc
+       INNER JOIN categoria c ON c.id = rc.categoria_id
+       WHERE rc.pregunta_filtro_id = :pregunta_filtro_id
+       ORDER BY rc.numero ASC';
+    $sql = sprintf($sql, self::$t1);
+    return ($rows = parent::query($sql, ['pregunta_filtro_id' => $preguntaFiltroId])) ? $rows : [];
+  }
+
+  /**
    * Calcula el puntaje de un reactivo a partir de la posición elegida en la
    * escala Likert, respetando su polaridad (RF-05). Ver la fórmula completa
    * documentada en opcionRespuestaModel.
