@@ -6,7 +6,9 @@ class loginController extends Controller implements ControllerInterface
   {
     if (Auth::validate()) {
       Flasher::new('Ya hay una sesión abierta.');
-      Redirect::to('admin/perfil');
+      // Al tablero real del rol de contexto (administrador/superusuario),
+      // no al panel nativo de Bee a secas — ver ruta_tablero_segun_rol().
+      Redirect::to(ruta_tablero_segun_rol());
     }
 
     // Ejecutar la funcionalidad del Controller padre
@@ -78,8 +80,16 @@ class loginController extends Controller implements ControllerInterface
         Auth::login($user['id'], $user);
       }
       
-      // Redirección a la página inicial después de log in
-      Redirect::to('admin');
+      // Redirección al tablero correcto SEGÚN EL ROL de contexto
+      // (usuarioModel). OJO: a propósito NO se usa ruta_tablero_segun_rol()
+      // aquí (lee obtener_usuario_actual() -> get_user(), que depende del
+      // global $Bee_User que Bee llena UNA VEZ antes de despachar el
+      // controlador — un login que ocurre a la mitad de ESTA misma petición
+      // no lo actualiza, así que siempre vería "sin sesión". Se resuelve el
+      // rol directamente contra la base de datos con el id que ya se tiene
+      // a la mano — ver docblock de ruta_tablero_segun_rol() para el detalle).
+      $usuarioVinculado = usuarioModel::by_bee_user_id($user['id']);
+      Redirect::to(ruta_tablero_para_rol($usuarioVinculado['rol'] ?? null));
 
     } catch (Exception $e) {
       Flasher::error($e->getMessage());

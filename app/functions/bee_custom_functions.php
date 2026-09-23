@@ -65,6 +65,51 @@ function obtener_rol_usuario_actual()
 }
 
 /**
+ * Regresa la ruta del tablero que corresponde a un rol de contexto dado.
+ * Punto único de esta decisión — ver ruta_tablero_segun_rol() para el caso
+ * normal (rol de la sesión actual) y su docblock para por qué existe esta
+ * variante parametrizada.
+ *
+ * @param string|null $rol 'administrador' | 'superusuario' | null
+ * @return string 'administrador' | 'superusuario' | 'admin' (panel nativo de Bee, cuenta sin rol de contexto — ej. el usuario demo "bee")
+ */
+function ruta_tablero_para_rol(?string $rol)
+{
+  switch ($rol) {
+    case 'administrador':
+      return 'administrador';
+    case 'superusuario':
+      return 'superusuario';
+    default:
+      return 'admin';
+  }
+}
+
+/**
+ * Regresa la ruta del tablero correcto para el usuario de Bee en sesión,
+ * según su rol de contexto (usuarioModel) — para no duplicar esta decisión
+ * entre los guards de rol (requiere_rol(), resultadosController) que
+ * necesitan "regresar a donde sí puede estar" en vez de expulsar al
+ * formulario público del encuestado.
+ *
+ * OJO — NO usar esta función dentro de loginController::post_login()
+ * inmediatamente después de Auth::login(): get_user()/obtener_usuario_actual()
+ * leen el global $Bee_User, que Bee sólo llena UNA VEZ por petición, ANTES
+ * de que se ejecute el controlador (ver Bee::init_authentication()). Un
+ * login que ocurre a la mitad de esa misma petición no lo actualiza, así
+ * que esta función vería la sesión de ANTES de iniciar sesión (ninguna) y
+ * regresaría 'admin' siempre, sin importar el rol real. Para ese caso usar
+ * ruta_tablero_para_rol($rol) directamente con el rol ya resuelto en la
+ * misma petición (ver loginController::post_login()).
+ *
+ * @return string 'administrador' | 'superusuario' | 'admin'
+ */
+function ruta_tablero_segun_rol()
+{
+  return ruta_tablero_para_rol(obtener_rol_usuario_actual());
+}
+
+/**
  * Guard de acceso por rol de contexto. Valida PRIMERO la sesión nativa de
  * Bee (Auth::validate() sólo comprueba que exista sesión, NO el rol) y
  * DESPUÉS que el rol de contexto (usuarioModel) coincida con el requerido.
@@ -74,6 +119,13 @@ function obtener_rol_usuario_actual()
  *
  * Uso: invocar al inicio del __construct() de administradorController
  * (con 'administrador') y de superusuarioController (con 'superusuario').
+ *
+ * Si el rol NO coincide (ej. un administrador visita una URL de
+ * superusuario), la redirección va a ruta_tablero_segun_rol() — SU propio
+ * tablero — en vez de DEFAULT_CONTROLLER (el formulario público del
+ * encuestado). **Por qué:** expulsar a un usuario con sesión activa al
+ * formulario público es una pérdida de contexto de navegación confusa; lo
+ * correcto es devolverlo a donde sí tiene acceso.
  *
  * @param string $rolRequerido 'administrador' | 'superusuario'
  * @return bool
@@ -87,7 +139,7 @@ function requiere_rol(string $rolRequerido)
 
   if (obtener_rol_usuario_actual() !== $rolRequerido) {
     Flasher::deny(2); // 'Permisos denegados.'
-    Redirect::to(DEFAULT_CONTROLLER);
+    Redirect::to(ruta_tablero_segun_rol());
   }
 
   return true;
