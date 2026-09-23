@@ -108,6 +108,7 @@ CREATE TABLE usuario (
   bee_user_id   INT NOT NULL,                       -- enlace a la cuenta nativa de Bee (bee_users.id) — FIRMADO a propósito: bee_users.id es int(11) sin UNSIGNED (ver db_beeframework.sql), la FK del Bloque C exige tipos idénticos
   rol           ENUM('superusuario','administrador') NOT NULL,
   secretaria_id INT UNSIGNED NOT NULL,
+  estado        ENUM('activo','inactivo') NOT NULL DEFAULT 'activo',  -- agregada 2026-09-24: cierra la limitación de la Pasada 7 (borrar_administrador() no podía usar DELETE por auditoria.usuario_id ON DELETE RESTRICT; ahora "baja" = estado='inactivo', ver docs/ARQUITECTURA.md)
   created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_usuario_bee_user (bee_user_id),
