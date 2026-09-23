@@ -709,3 +709,90 @@ pasar durante el desarrollo.
 - `editar_administrador()` sigue siendo un stub (no pedido por esta tarea).
 - Módulo de administrador (alta de centros de trabajo, tokens) — "segunda
   tarea" explícita del handoff §6, para después.
+
+---
+
+## 15. Columna `usuario.estado` + módulo de administrador (2026-09-24)
+
+### 15.1 Cierre de la limitación de la Pasada 7
+
+- **`docs/DDL/ddl.sql`**: se agregó `estado ENUM('activo','inactivo') NOT NULL
+  DEFAULT 'activo'` a la `CREATE TABLE usuario` (para instalaciones nuevas).
+- **`scripts/alter_usuario_estado.sql`** (nuevo): el `ALTER TABLE` para la
+  base ya existente — **el usuario lo ejecuta en phpMyAdmin, Claude no lo
+  corrió contra ninguna base de datos**, ni siquiera la local de desarrollo
+  (a diferencia de los datos de prueba desechables de otras pasadas, aquí
+  se trata de un cambio de esquema y se respetó la instrucción explícita).
+  Esto significa que la pieza de "marcar/filtrar por estado" de esta
+  sección **no se pudo verificar en vivo** todavía — sólo se verificó con
+  `php -l` y revisión de código; sí se verificó en vivo que la revocación
+  de acceso (invalidar la contraseña) sigue funcionando exactamente igual
+  que antes (no se rompió nada existente).
+- **`superusuarioController::borrar_administrador()`**: ahora, además de
+  invalidar la contraseña (ya suficiente por sí sola), intenta marcar
+  `estado='inactivo'` — envuelto en su propio `try/catch` que ignora el
+  error si la columna todavía no existe, para que la revocación real nunca
+  dependa de que el `ALTER` ya se haya aplicado.
+- **`usuarioModel::administradores_por_secretaria()`**: acepta un segundo
+  parámetro opcional `$estado` para filtrar. **`superusuarioController::administradores()`**
+  intenta usarlo si viene `?estado=activo|inactivo` en la URL, y si la
+  consulta falla (columna inexistente) se degrada automáticamente a mostrar
+  todos sin filtro — nunca truena la página.
+- **`administradoresView.php`**: columna "Estado" con badge
+  verde/gris + tres enlaces de filtro (Todos/Activos/Inactivos). Si
+  `$admin->estado` no viene (columna no aplicada todavía), se asume
+  `'activo'` de forma segura (`?? 'activo'`), sin warnings.
+
+### 15.2 Módulo de administrador — implementado
+
+Todo verificado en vivo con `curl` contra el servidor local (mismo método
+que la Pasada 7), con datos desechables, limpiados al final.
+
+- **`centroTrabajoModel`**: sin cambios de código — ya tenía todo lo
+  necesario desde la Pasada 3/4 (`insertOne`, `por_administrador()`,
+  y la guía se resuelve con `guiaModel::por_numero_trabajadores()`, nunca
+  se guarda en la tabla).
+- **`tokenModel::generar_codigo()`**: implementado —
+  `bin2hex(random_bytes(16))` (128 bits de entropía), no `random_password()`
+  (usa `rand()`, no apto para una credencial de acceso), con verificación de
+  colisión contra `by_codigo()` antes de regresar.
+- **`administradorController::centros_trabajo()`**: lista
+  `centroTrabajoModel::por_administrador()` y enriquece cada fila con la
+  guía ya resuelta (una sola vez en el controlador, no N+1 en la vista).
+- **`post_centros_trabajo()`**: `secretaria_id`/`administrador_id` SIEMPRE
+  del usuario en sesión, nunca de `$_POST`. Validación de entero positivo
+  (`ctype_digit`). El guard NOM-035 (≤15 → sin campaña, con el mensaje
+  exacto pedido) ya existía desde antes (Pasada 5); ahora si pasa, sí
+  persiste el centro. Verificado en vivo: 15 trabajadores → rechazado, no
+  se crea nada; 20 trabajadores → creado, aparece en el listado con badge
+  `GRII`; `num_trabajadores=abc` → rechazado con el mensaje de validación.
+- **`tokens()` / `post_tokens()` / `revocar_token()`**: alcance verificado
+  en tres niveles — el centro debe pertenecer al administrador en sesión
+  (`centro_trabajo.administrador_id === usuario.id`), no sólo a su
+  secretaría (más estricto que el súper usuario, que sí comparte
+  secretaría entre administradores). `post_tokens()` agrega campos
+  `fecha_inicio`/`fecha_fin` al formulario (antes no existían) con
+  validación de fechas válidas + `fecha_fin >= fecha_inicio`. Verificado en
+  vivo: token generado con código de 32 hex, `tokenModel::esta_vigente()`
+  regresa `true` de inmediato; `fecha_fin` anterior a `fecha_inicio` →
+  rechazado, no se crea; revocado → `estado='inactivo'` y
+  `esta_vigente()` pasa a `false`.
+- **Auditoría**: `alta_centro_trabajo`, `generar_token`, `revocar_token`
+  registrados — confirmado leyendo la bitácora real del súper usuario de
+  prueba tras la corrida.
+- **Alcance por administrador, verificado en vivo (el punto más estricto
+  del criterio de aceptación):** se crearon DOS administradores de prueba
+  en la **misma** secretaría (a propósito, para probar el caso más
+  exigente) — el segundo no vio el centro de trabajo del primero en su
+  listado, y al pedir `/administrador/tokens/{id}` del centro ajeno **por
+  URL directa**, fue rechazado y redirigido — no basta con que la vista no
+  muestre el enlace, el controlador también lo bloquea.
+
+### 15.3 Lo que falta (fuera de esta tarea)
+
+- Verificación en vivo de `usuario.estado` (13.2.1) — pendiente de que el
+  usuario aplique `scripts/alter_usuario_estado.sql`.
+- `borrar_centro_trabajo()` y `habilitar()` siguen como stubs — no los pidió
+  esta tarea (que pide generar tokens directamente vía `tokens()`/`post_tokens()`,
+  ya cubre el caso de uso de "habilitar").
+- `editar_centro_trabajo()` sigue como stub.

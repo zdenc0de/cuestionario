@@ -1,22 +1,22 @@
 # Bitácora de cambios — Cuestionario NOM-035 (sesiones con Claude)
 
 > Documento de auditoría: enumera **todos** los archivos creados o modificados
-> por el agente Claude en este proyecto hasta el 2026-09-23, en qué momento
-> (de 7 pasadas de trabajo) y **por qué**, para que otro agente/desarrollador
+> por el agente Claude en este proyecto hasta el 2026-09-24, en qué momento
+> (de 8 pasadas de trabajo) y **por qué**, para que otro agente/desarrollador
 > pueda revisarlo contra el código real. No repite la explicación funcional
 > de cada módulo (eso ya está en `docs/ARQUITECTURA.md`); aquí el foco es
 > **el cambio puntual y su justificación**.
 >
 > Contexto de repositorio en el momento de escribir esto: rama `main`, HEAD
-> en `2972f9d` ("docs: documenta el motor de calificacion (Pasada 6)"). La
-> Pasada 7 (este documento) está en el working tree, sin commitear todavía.
-> Claude no ejecutó ningún comando de Git en ningún momento; los commits
-> fueron corridos por el usuario con comandos que Claude únicamente redactó
-> como texto.
+> en `5b2335e` ("docs: documenta el bootstrap y el modulo de superusuario
+> (Pasada 7)"). La Pasada 8 (este documento) está en el working tree, sin
+> commitear todavía. Claude no ejecutó ningún comando de Git en ningún
+> momento; los commits fueron corridos por el usuario con comandos que
+> Claude únicamente redactó como texto.
 
 ---
 
-## 0. Las 7 pasadas de trabajo
+## 0. Las 8 pasadas de trabajo
 
 | Pasada | Disparador | Qué produjo |
 |---|---|---|
@@ -27,8 +27,9 @@
 | **5. Ajustes puntuales** | Prompt de "mi agente": afinar la captura de `ip` y agregar el guard funcional de ≤15 trabajadores | `registrar_auditoria()` deja de usar `get_user_ip()` (confía en cabeceras falsificables) y usa `$_SERVER['REMOTE_ADDR']`; guard real en `administradorController::post_centros_trabajo()`; TODO detallado del mismo guard en `cuestionarioController::post_acceso()`; sección 11 de `ARQUITECTURA.md`. |
 | **6. Motor de calificación** | `docs/HANDOFF_DESARROLLO.md` §5 — primera tarea de desarrollo real | 4 modelos nuevos (`categoriaModel`, `dominioModel`, `umbralModel`, `resultadoDetalleModel`), `resultadoModel::calcular_para_aplicacion()` implementado de verdad (ya no es un stub), script de verificación, corrida y confirmada contra la BD real (0 fallos), sección 13 de `ARQUITECTURA.md`. |
 | **7. Súper usuario** | `docs/HANDOFF_DESARROLLO.md` §3-4 — segunda tarea: cuenta raíz + módulo de súper usuario | Bootstrap SQL real (`scripts/bootstrap_superusuario.sql`, hash calculado con la fórmula real de Bee) + generador reutilizable; `superusuarioController` implementado (alta/listado de administradores, revocación, bitácora, alcance por secretaría); todo verificado con `curl` contra el servidor local real, no sólo con `php -l`. Sección 14 de `ARQUITECTURA.md`. |
+| **8. Administrador** | `docs/HANDOFF_DESARROLLO.md` §3-4 — cierra la limitación de la Pasada 7 (`usuario.estado`) + tercera tarea: módulo de administrador | `scripts/alter_usuario_estado.sql` (para que el usuario lo corra, Claude no lo ejecutó) + código ya preparado para antes/después de aplicarlo; `administradorController` implementado (alta de centros con el guard ≤15, listado, generación/listado/revocación de tokens con `bin2hex(random_bytes())`); alcance por `administrador_id` (más estricto que por secretaría) verificado en vivo con dos administradores de la MISMA secretaría. Sección 15 de `ARQUITECTURA.md`. |
 
-En las 6 pasadas se respetaron las mismas restricciones: **no** se ejecutó
+En las 8 pasadas se respetaron las mismas restricciones: **no** se ejecutó
 Git, **no** se modificó ningún archivo de `app/classes/*` (núcleo de Bee), y
 todo lo agregado sigue las convenciones nativas de Bee Framework 1.5.8
 (controladores `xyzController extends Controller implements ControllerInterface`,
@@ -73,6 +74,11 @@ a como se creó originalmente.
   `bee_users` que tenía pendiente desde la Pasada 1 (`username`/`email` no
   vivían en esta tabla) — es lo que consume
   `superusuarioController::administradores()` para el listado real.
+- **Pasada 8:** `administradores_por_secretaria()` gana un segundo
+  parámetro opcional `$estado` para filtrar por `usuario.estado` (columna
+  nueva, ver sección 14.1) — documentado explícitamente que lanza
+  excepción si se usa antes de que exista la columna, y que el llamador
+  debe capturarla.
 
 ### 1.3 `centroTrabajoModel.php`
 - **Pasada 1:** creado con `guia_id` como columna propuesta y
@@ -114,6 +120,11 @@ a como se creó originalmente.
      `('activo','expirado','revocado')` de la Pasada 2. Se ajustó `revocar()`
      para usar `'inactivo'`. **Por qué:** alinear con la única fuente de
      verdad del esquema (`ddl.sql`).
+- **Pasada 8:** `generar_codigo()` implementado — era un stub que regresaba
+  `null` desde la Pasada 1. `bin2hex(random_bytes(16))`, no
+  `random_password()` (usa `rand()`, no criptográficamente seguro, no apto
+  para una credencial de acceso), con verificación de colisión contra
+  `by_codigo()`.
 
 ### 1.5 `guiaModel.php`
 - **Pasada 1:** creado con `min_trabajadores`/`max_trabajadores` y columnas
@@ -314,6 +325,15 @@ porqué (usaría `transaction=true` por default y comitearía a medio camino).
   sólo un comentario — y éste es el único punto del sistema donde
   `num_trabajadores` llega como dato crudo, sin depender de tablas que
   todavía no existen.
+- **Pasada 8:** implementación completa (ver sección 14.2 para el detalle).
+  `centros_trabajo()`/`post_centros_trabajo()` reales (secretaria/administrador
+  siempre de la sesión, validación de entero positivo). `tokens()`/`post_tokens()`/
+  `revocar_token()` reales, con alcance por `administrador_id` (no basta
+  compartir secretaría) y validación de fechas (`fecha_fin >= fecha_inicio`,
+  campos nuevos en el formulario). `borrar_centro_trabajo()` y `habilitar()`
+  quedan igual — no los pidió esta tarea. Verificado end-to-end con `curl`,
+  incluido el caso de alcance más exigente (dos administradores de la misma
+  secretaría).
 
 ### 2.3 `superusuarioController.php` (rol `superusuario`)
 - **Pasada 1:** creado con `index()`, `administradores()`/`post_administradores()`,
@@ -330,6 +350,11 @@ porqué (usaría `transaction=true` por default y comitearía a medio camino).
   `borrar_administrador()` de "borrar" a "revocar"). `editar_administrador()`
   queda igual, no era parte de esta tarea. Verificado end-to-end con `curl`
   contra el servidor local (sección 13.3), no sólo con `php -l`.
+- **Pasada 8:** `administradores()` acepta filtro `?estado=` (con
+  degradación a "sin filtro" si la columna no existe todavía).
+  `borrar_administrador()` ahora también marca `estado='inactivo'` (en un
+  `try/catch` propio que no rompe si la columna no existe) — ver
+  sección 14.1.
 - **Nota aparte (no relacionada con Claude):** el usuario detectó una copia
   accidental de este archivo en `docs/superusuarioController.php` (agregada
   en el commit `e73100a`, probablemente por un `git add` demasiado amplio) y
@@ -390,6 +415,19 @@ completo después; los únicos ajustes fueron:
 - **`superusuario/bitacoraView.php`** (Pasada 7): mismo cambio — `foreach`
   real sobre `$d->bitacora` (usuario, acción, entidad + `entidad_id`,
   detalle, IP, fecha) en vez del placeholder.
+- **`superusuario/administradoresView.php`** (Pasada 8): columna "Estado"
+  (badge verde/gris) + 3 enlaces de filtro (Todos/Activos/Inactivos);
+  `$admin->estado ?? 'activo'` para no romper si la columna todavía no
+  existe (ver sección 14.1).
+- **`administrador/centrosTrabajoView.php`** (Pasada 8): de placeholder a
+  `foreach` real sobre `$d->centros`, con badge de la guía asignada
+  (`GRII`/`GRIII`) y enlace a "Tokens". Se quitó la columna "Tokens" que
+  sólo mostraba un botón sin contar nada — se dejó como acción, no como dato.
+- **`administrador/tokensView.php`** (Pasada 8): de placeholder a `foreach`
+  real sobre `$d->tokens`, con badge de estado y enlace de revocar. Se
+  agregaron los campos `fecha_inicio`/`fecha_fin` al formulario (antes no
+  existían, las fechas se hubieran tenido que inventar en el controlador
+  sin que el administrador pudiera elegirlas).
 
 ---
 
@@ -501,6 +539,20 @@ ambos casos):**
   `Planificacion_Proyecto_Cuestionario_NOM-035 (1-2).md` (que sí tenía el
   valor equivocado) y en el código (`centroTrabajoModel::determinar_guia()`,
   ver 1.3), no en el DDL.
+
+**Pasada 8 (tercera modificación):**
+- Se agregó `estado ENUM('activo','inactivo') NOT NULL DEFAULT 'activo'`
+  a la tabla `usuario`, justo después de `secretaria_id`. **Por qué:**
+  cierra la limitación documentada en la Pasada 7 — `borrar_administrador()`
+  no podía usar `DELETE` por `auditoria.usuario_id ON DELETE RESTRICT`, así
+  que la "baja" quedaba invisible en el listado (ver sección 14.1).
+- A diferencia de la Pasada 4, este cambio **no se aplicó contra ninguna
+  base de datos**, ni siquiera la local de desarrollo — el usuario pidió
+  explícitamente el `ALTER TABLE` para correrlo él mismo en phpMyAdmin. Se
+  entregó como `scripts/alter_usuario_estado.sql` (mismo patrón que
+  `scripts/bootstrap_superusuario.sql` de la Pasada 7: un `.sql` standalone,
+  documentado, listo para ejecutarse fuera de Claude). Ver sección 14.1 y
+  15 (nota de transparencia).
 
 ---
 
@@ -853,7 +905,85 @@ intacto) antes de continuar la verificación donde se había quedado.
 
 ---
 
-## 14. Restricciones respetadas en las 7 pasadas
+## 14. Pasada 8 — `usuario.estado` y módulo de administrador (2026-09-24)
+
+Tercera tarea de desarrollo real (`docs/HANDOFF_DESARROLLO.md` §3-4), en dos
+partes: cerrar la limitación de la Pasada 7 y construir el módulo de
+administrador de punta a punta.
+
+### 14.1 `usuario.estado` (cierra la limitación de la Pasada 7)
+
+- **`docs/DDL/ddl.sql`**: se agregó la columna a la `CREATE TABLE usuario`
+  (instalaciones nuevas).
+- **`scripts/alter_usuario_estado.sql`** (nuevo): el `ALTER TABLE` para la
+  base ya existente. **El prompt fue explícito: "no lo ejecutes tú" —
+  Claude no lo corrió contra ninguna base de datos**, ni siquiera la local
+  de desarrollo donde sí se insertan/borran datos de prueba en otras
+  pasadas. Diferencia clave: aquí es un cambio de **esquema**, no de datos.
+- **`superusuarioController::borrar_administrador()`**: intenta marcar
+  `estado='inactivo'` en un `try/catch` propio que ignora el error si la
+  columna no existe — la revocación real (invalidar contraseña) nunca
+  depende de que el `ALTER` ya se haya aplicado.
+- **`usuarioModel::administradores_por_secretaria()`**: segundo parámetro
+  opcional `$estado`. **`administradores()`**: intenta filtrar por
+  `?estado=` y se degrada a mostrar todos si la consulta falla.
+- **`administradoresView.php`**: badge de estado + filtro Todos/Activos/Inactivos,
+  con `$admin->estado ?? 'activo'` para no romper si la columna no existe.
+- **Verificación:** sólo `php -l` y revisión de código para la parte de
+  `estado` (no se pudo probar en vivo, ver 14.3); sí se re-verificó en vivo
+  que la revocación por contraseña sigue funcionando exactamente igual que
+  en la Pasada 7 (no se rompió nada existente).
+
+### 14.2 Módulo de administrador — implementado y verificado en vivo
+
+- **`tokenModel::generar_codigo()`**: `bin2hex(random_bytes(16))` (128 bits
+  de entropía) — **no** `random_password()` de `bee_core_functions.php`
+  (usa `rand()`, no apto para una credencial de acceso), con verificación
+  de colisión contra `by_codigo()`.
+- **`administradorController`**: `centros_trabajo()` (lista + resuelve la
+  guía de cada fila una sola vez, en el controlador — no N+1 en la vista),
+  `post_centros_trabajo()` (`secretaria_id`/`administrador_id` siempre del
+  usuario en sesión, nunca de `$_POST`; validación de entero positivo),
+  `tokens()`/`post_tokens()` (campos `fecha_inicio`/`fecha_fin` nuevos en
+  el formulario, validación de fechas + `fecha_fin >= fecha_inicio`),
+  `revocar_token()`. Cada método valida alcance por
+  `centro_trabajo.administrador_id === usuario.id` — no basta con
+  pertenecer a la misma secretaría (a diferencia del súper usuario, que sí
+  comparte secretaría entre administradores).
+- **`centrosTrabajoView.php`/`tokensView.php`**: de placeholders a `foreach`
+  reales, con badges de guía/estado.
+- **Verificado por `curl` contra el servidor local** (mismo método que la
+  Pasada 7), con datos desechables limpiados al final:
+  - 15 trabajadores → rechazado con el mensaje exacto pedido, nada se crea.
+  - `num_trabajadores=abc` → rechazado por la validación.
+  - 20 trabajadores → centro creado, aparece con badge `GRII`.
+  - Token generado → `tokenModel::esta_vigente()` regresa `true` de
+    inmediato (criterio de aceptación explícito).
+  - `fecha_fin` anterior a `fecha_inicio` → rechazado, nada se crea.
+  - Token revocado → `estado='inactivo'`, `esta_vigente()` pasa a `false`.
+  - Bitácora del súper usuario muestra `alta_centro_trabajo`,
+    `generar_token`, `revocar_token`.
+  - **Alcance, el caso más exigente:** dos administradores de prueba en la
+    **misma** secretaría — el segundo no ve el centro del primero en su
+    listado, y pedir `/administrador/tokens/{id}` del centro ajeno **por
+    URL directa** es rechazado y redirigido (el controlador bloquea, no
+    sólo la vista oculta el enlace).
+  - Limpieza total confirmada: `SELECT COUNT(*)` en 0 para las tablas
+    operativas de prueba, seed del instrumento intacto (2/118/145).
+
+### 14.3 Nota de transparencia
+
+A diferencia de las pasadas 6 y 7, esta vez **una parte del código no se
+verificó en vivo** (el filtro/marca por `usuario.estado`, sección 14.1) —
+porque el prompt pidió explícitamente no ejecutar el `ALTER TABLE`. Se
+prefirió dejarlo así, honesto, en vez de aplicar el cambio "sólo para
+probar" y luego revertirlo — el prompt no distinguía entre "ejecutarlo
+para siempre" y "ejecutarlo temporalmente", así que se tomó la lectura más
+conservadora.
+
+---
+
+## 15. Restricciones respetadas en las 8 pasadas
 
 - **Cero comandos de Git ejecutados por Claude.** Cuando el usuario pidió
   los 6 commits segmentados, Claude entregó los comandos como texto para que
@@ -865,29 +995,38 @@ intacto) antes de continuar la verificación donde se había quedado.
 - **Los dos únicos archivos "existentes" del núcleo/framework que se
   modificaron** siguen siendo los que Bee reserva para el proyecto:
   `app/functions/bee_custom_functions.php` y `templates/includes/styles.php`
-  (secciones 4 y 5). Las pasadas 6 y 7 no agregaron un tercero: `scripts/`
+  (secciones 4 y 5). Las pasadas 6, 7 y 8 no agregaron un tercero: `scripts/`
   es una carpeta nueva, fuera de `app/` y `templates/`, sin rutas ni
   controlador propio.
-- **`docs/DDL/ddl.sql`** se modificó dos veces (Pasada 3 y Pasada 4), con
-  autorización explícita en ambas. En las pasadas 6 y 7 se leyó como fuente
-  de verdad del esquema y **no** se tocó — todo lo que necesitaban ya estaba
-  (incluido el hallazgo de `ON DELETE RESTRICT` en `auditoria.usuario_id`
-  de la Pasada 7, que se resolvió cambiando el diseño de la aplicación, no
-  el esquema).
+- **`docs/DDL/ddl.sql`** se modificó tres veces (Pasada 3, Pasada 4 y
+  Pasada 8), con autorización explícita en las tres. En las pasadas 6 y 7
+  se leyó como fuente de verdad del esquema y **no** se tocó (incluido el
+  hallazgo de `ON DELETE RESTRICT` en `auditoria.usuario_id` de la Pasada
+  7, que se resolvió cambiando el diseño de la aplicación, no el esquema).
+  En la Pasada 8 el `ALTER TABLE` correspondiente se entregó como archivo
+  aparte (`scripts/alter_usuario_estado.sql`) para que lo corra el usuario
+  — **no se ejecutó contra ninguna base de datos, ni la local.**
 - **`Planificacion_Proyecto_Cuestionario_NOM-035 (1-2).md`** se tocó por
   primera vez en la Pasada 4 (3 líneas: el límite de la Guía II y RF-00),
   también para corregir un dato que el segundo agente confirmó como
   erróneo contra el texto oficial de la norma — no por iniciativa unilateral
   de Claude sin respaldo.
 - **`php -l` en cada archivo tocado, en cada pasada, incluida ésta** (2
-  modelos, 1 controlador, 2 vistas, 2 scripts en la Pasada 7).
+  modelos, 1 controlador, 2 vistas, 2 scripts en la Pasada 7; 2 modelos,
+  2 controladores, 3 vistas, 1 SQL en la Pasada 8).
 - **La Pasada 7 sí insertó y borró datos reales en la BD del usuario**
   (datos de prueba desechables, para la verificación por `curl` de 13.3) —
   pero **no** dejó nada permanente: se confirmó con `SELECT COUNT(*)` que
   las tablas operativas quedaron en 0 filas al terminar, igual que al
   empezar. Las credenciales reales del bootstrap (13.1) se entregan como
   SQL para que el usuario las aplique él mismo, tal como pidió — Claude no
-  las insertó en la base de datos del usuario.
+  las insertó en la base de datos del usuario. **La Pasada 8 repitió el
+  mismo patrón** para verificar el módulo de administrador (14.2) — datos
+  de prueba desechables, limpiados al final, confirmado con
+  `SELECT COUNT(*)` — pero esta vez con una distinción explícita: los
+  **datos** de prueba sí se insertaron/borraron en la BD local, el **ALTER
+  TABLE** (cambio de esquema) no se ejecutó en absoluto, ni siquiera ahí
+  (ver 14.1/14.3).
 - **Se reinició MariaDB y Apache localmente** durante la Pasada 7 (13.3,
   incidente) — acción de infraestructura local de desarrollo, no
   destructiva (se confirmó integridad de datos antes/después), no
