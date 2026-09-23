@@ -101,18 +101,31 @@ class usuarioModel extends Model {
    * superusuarioController::administradores() para el listado (RF-09).
    *
    * @param mixed $secretariaId
+   * @param string|null $estado 'activo' | 'inactivo' | null (sin filtrar).
+   * OJO: si se pasa un valor distinto de null y la columna `usuario.estado`
+   * todavía no existe (pendiente de scripts/alter_usuario_estado.sql, ver
+   * docs/ARQUITECTURA.md sección 14.2), esta consulta lanza una excepción
+   * ("Unknown column") — el llamador debe capturarla y volver a llamar sin
+   * filtro (ver superusuarioController::administradores()).
    * @return array
    */
-  static function administradores_por_secretaria($secretariaId)
+  static function administradores_por_secretaria($secretariaId, ?string $estado = null)
   {
     $sql =
       "SELECT u.*, bu.username, bu.email
        FROM %s u
        INNER JOIN bee_users bu ON bu.id = u.bee_user_id
-       WHERE u.rol = 'administrador' AND u.secretaria_id = :secretaria_id
-       ORDER BY u.id DESC";
-    $sql = sprintf($sql, self::$t1);
-    return ($rows = parent::query($sql, ['secretaria_id' => $secretariaId])) ? $rows : [];
+       WHERE u.rol = 'administrador' AND u.secretaria_id = :secretaria_id";
+    $params = ['secretaria_id' => $secretariaId];
+
+    if ($estado !== null) {
+      $sql             .= ' AND u.estado = :estado';
+      $params['estado'] = $estado;
+    }
+
+    $sql .= ' ORDER BY u.id DESC';
+    $sql  = sprintf($sql, self::$t1);
+    return ($rows = parent::query($sql, $params)) ? $rows : [];
   }
 
   static function update_by_id($id, $params)

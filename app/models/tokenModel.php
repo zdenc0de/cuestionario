@@ -114,16 +114,28 @@ class tokenModel extends Model {
   }
 
   /**
-   * Genera un código único para un token
-   * TODO (fase de Diseño): confirmar longitud/formato requerido (¿alfanumérico legible para captura manual?)
+   * Genera un código único y criptográficamente aleatorio para un token,
+   * con `bin2hex(random_bytes(16))` (32 caracteres hexadecimales, caben
+   * sobrados en el VARCHAR(64) de la columna) — no `random_password()` de
+   * bee_core_functions.php, que usa `rand()`, no apto para algo que
+   * funciona como credencial de acceso. Verifica colisión contra
+   * `by_codigo()` antes de regresar (en la práctica, con 128 bits de
+   * entropía, la probabilidad de colisión es despreciable; el `do/while`
+   * es sólo una salvaguarda barata).
+   *
+   * TODO (fase de Diseño): confirmar si se prefiere un formato más
+   * "legible" para captura manual en vez de hex crudo — no se pidió así
+   * por ahora.
    *
    * @return string
    */
   static function generar_codigo()
   {
-    // TODO: usar random_password() de bee_core_functions.php o bin2hex(random_bytes())
-    // y validar que no exista colisión contra by_codigo() antes de insertar
-    return null;
+    do {
+      $codigo = bin2hex(random_bytes(16));
+    } while (self::by_codigo($codigo) !== null);
+
+    return $codigo;
   }
 
   /**
