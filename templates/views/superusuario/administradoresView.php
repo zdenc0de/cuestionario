@@ -36,25 +36,41 @@
   <div class="col-12 col-md-6 col-lg-6 col-xl-8">
     <div class="card shadow mb-4">
       <div class="card-header py-3">
-        <h6 class="m-0 font-weight-bold text-primary">Administradores</h6>
+        <h6 class="m-0 font-weight-bold text-primary">Administradores de tu secretaría</h6>
       </div>
       <div class="card-body">
-        <!-- TODO (fase de Desarrollo): tabla con $d->administradores (usuarioModel::administradores_por_secretaria()) -->
         <div class="table-responsive">
           <table class="table table-bordered" width="100%">
             <thead>
               <tr>
                 <th>Usuario</th>
                 <th>Correo</th>
-                <th>Centros de trabajo</th>
+                <th>Alta</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
-              <!-- TODO: foreach ($d->administradores as $admin): ... endforeach; -->
-              <tr>
-                <td colspan="4" class="text-center text-muted">Sin registros (pendiente de implementación).</td>
-              </tr>
+              <?php if (empty($d->administradores)): ?>
+                <tr>
+                  <td colspan="4" class="text-center text-muted">Aún no hay administradores dados de alta.</td>
+                </tr>
+              <?php else: ?>
+                <?php foreach ($d->administradores as $admin): ?>
+                  <tr>
+                    <td><?php echo htmlspecialchars($admin->username); ?></td>
+                    <td><?php echo htmlspecialchars($admin->email); ?></td>
+                    <td><?php echo htmlspecialchars($admin->created_at); ?></td>
+                    <td>
+                      <!-- Patrón de Bee: enlace GET + token CSRF en query string (ver adminController::borrar_usuario()) -->
+                      <a href="<?php echo get_base_url(); ?>superusuario/borrar_administrador/<?php echo $admin->id; ?>?_t=<?php echo CSRF_TOKEN; ?>"
+                         class="btn btn-sm btn-outline-danger confirmar"
+                         title="Revoca el acceso (no borra su historial de auditoría, ver docblock de borrar_administrador())">
+                        Revocar acceso
+                      </a>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              <?php endif; ?>
             </tbody>
           </table>
         </div>
