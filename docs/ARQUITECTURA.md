@@ -851,3 +851,60 @@ mismo request — el resultado queda calculado y persistido antes de mostrar
 la pantalla de agradecimiento, que a propósito **no** muestra la
 calificación ni el nivel de riesgo (eso es para administrador/súper
 usuario, no para el encuestado).
+
+## 17. Navegación de punta a punta (2026-09-24)
+
+Los tres flujos (encuestado, administrador, súper usuario) y el motor de
+calificación ya estaban construidos, pero no estaban **conectados**: el
+login no sabía a dónde mandar a cada rol, el panel de administración no
+tenía ningún enlace a las funciones reales del sistema, y no existía una
+vista de resultado individual real. Ver `docs/BITACORA_CAMBIOS.md` sección
+17 para el detalle completo (incluye dos hallazgos reales no triviales);
+aquí sólo el diseño resultante.
+
+### 17.1 Redirección post-login por rol
+
+`ruta_tablero_segun_rol()` (`app/functions/bee_custom_functions.php`) es el
+punto único que decide a dónde va cada rol: `'administrador'` ->
+`administrador`, `'superusuario'` -> `superusuario`, cualquier otro caso
+(sesión de Bee sin rol de contexto, ej. la cuenta demo nativa) -> `admin`
+(panel nativo de Bee). La usan `requiere_rol()` y
+`resultadosController::verificarAccesoCentroTrabajo()` cuando el rol/alcance
+no coincide — regresan al usuario a SU tablero, no lo expulsan al
+formulario público del encuestado.
+
+**Excepción importante:** dentro de `loginController::post_login()`, en el
+mismo request donde se acaba de llamar `Auth::login()`, NO se puede usar
+`ruta_tablero_segun_rol()` — depende de `get_user()`, que lee el global
+`$Bee_User`, y Bee sólo llena ese global una vez por petición, ANTES de
+despachar el controlador (`Bee::init_authentication()`). Un login a la mitad
+de esa misma petición no lo actualiza. Para ese caso específico existe
+`ruta_tablero_para_rol($rol)`, que recibe el rol ya resuelto directamente
+contra la base de datos (`usuarioModel::by_bee_user_id($user['id'])`), sin
+pasar por el global.
+
+### 17.2 Sidebar por rol de contexto
+
+`templates/includes/admin/sidebar.php` (compartido por
+`administrador`/`superusuario`/`resultados` vía `dashboardTop.php`) rama por
+`obtener_rol_usuario_actual()` en vez de mostrar siempre el catálogo
+genérico de la plantilla de Bee. Una cuenta sin rol de contexto sigue viendo
+el catálogo original — no se rompió la demo nativa.
+
+### 17.3 Resultado individual real y su punto de entrada
+
+`resultadosController::individual()` renderiza identidad, guía, calificación
+final + nivel de riesgo y el desglose por categoría/dominio
+(`resultado_detalle`, nombrado con `categoriaModel`/`dominioModel`). Se
+llega a él desde `administrador/tokens/{centroId}` (`administradorController::tokens()`
+ahora también carga `aplicacionModel::por_centro_trabajo()`, ya filtrada a
+`estado='completada'`), con un enlace "Ver resultado" por aplicación.
+
+**Nota técnica para el resto de las vistas de `resultados/`:** `$d` (lo que
+recibe la vista) NO son los arreglos asociativos que regresan los modelos —
+`View::renderBeeTemplate()` los convierte con
+`json_decode(json_encode($data))`, así que cualquier fila termina siendo
+`stdClass` (acceso con `->`, no con `['clave']`). Ya era el patrón en las
+vistas de administrador/súper usuario; `individualView.php` no lo siguió en
+su primera versión y produjo un `Fatal error` en cuanto se probó con datos
+reales — corregido, ver bitácora 17.3 para el detalle.

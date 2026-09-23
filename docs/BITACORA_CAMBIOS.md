@@ -2,21 +2,21 @@
 
 > Documento de auditoría: enumera **todos** los archivos creados o modificados
 > por el agente Claude en este proyecto hasta el 2026-09-24, en qué momento
-> (de 9 pasadas de trabajo) y **por qué**, para que otro agente/desarrollador
+> (de 10 pasadas de trabajo) y **por qué**, para que otro agente/desarrollador
 > pueda revisarlo contra el código real. No repite la explicación funcional
 > de cada módulo (eso ya está en `docs/ARQUITECTURA.md`); aquí el foco es
 > **el cambio puntual y su justificación**.
 >
 > Contexto de repositorio en el momento de escribir esto: rama `main`, HEAD
 > en `5b2335e` ("docs: documenta el bootstrap y el modulo de superusuario
-> (Pasada 7)"). Las Pasadas 8 y 9 (este documento) están en el working tree,
-> sin commitear todavía. Claude no ejecutó ningún comando de Git en ningún
-> momento; los commits fueron corridos por el usuario con comandos que
-> Claude únicamente redactó como texto.
+> (Pasada 7)"). Las Pasadas 8, 9 y 10 (este documento) están en el working
+> tree, sin commitear todavía. Claude no ejecutó ningún comando de Git en
+> ningún momento; los commits fueron corridos por el usuario con comandos
+> que Claude únicamente redactó como texto.
 
 ---
 
-## 0. Las 9 pasadas de trabajo
+## 0. Las 10 pasadas de trabajo
 
 | Pasada | Disparador | Qué produjo |
 |---|---|---|
@@ -29,8 +29,9 @@
 | **7. Súper usuario** | `docs/HANDOFF_DESARROLLO.md` §3-4 — segunda tarea: cuenta raíz + módulo de súper usuario | Bootstrap SQL real (`scripts/bootstrap_superusuario.sql`, hash calculado con la fórmula real de Bee) + generador reutilizable; `superusuarioController` implementado (alta/listado de administradores, revocación, bitácora, alcance por secretaría); todo verificado con `curl` contra el servidor local real, no sólo con `php -l`. Sección 14 de `ARQUITECTURA.md`. |
 | **8. Administrador** | `docs/HANDOFF_DESARROLLO.md` §3-4 — cierra la limitación de la Pasada 7 (`usuario.estado`) + tercera tarea: módulo de administrador | `scripts/alter_usuario_estado.sql` (para que el usuario lo corra, Claude no lo ejecutó) + código ya preparado para antes/después de aplicarlo; `administradorController` implementado (alta de centros con el guard ≤15, listado, generación/listado/revocación de tokens con `bin2hex(random_bytes())`); alcance por `administrador_id` (más estricto que por secretaría) verificado en vivo con dos administradores de la MISMA secretaría. Sección 15 de `ARQUITECTURA.md`. |
 | **9. Encuestado** | `docs/HANDOFF_DESARROLLO.md` §3-4 — cuarta tarea: flujo completo del encuestado (`cuestionarioController`), cierra la cadena hasta el motor de calificación de la Pasada 6 | `preguntaFiltroModel` (nuevo) + 2 métodos JOIN en `reactivoModel`; `cuestionarioController` implementado de verdad (acceso por token, sesión nativa de PHP para ligar el flujo sin cuenta de Bee, lógica condicional de las preguntas-filtro, validación de completitud, cálculo automático del resultado al enviar); `cuestionarioView.php` reescrita para usar datos reales del instrumento. Verificado end-to-end con `curl` contra datos REALES capturados por el flujo (no inyectados), ambas guías, calificación confirmada a mano. Sección 16 de `ARQUITECTURA.md`. |
+| **10. Navegación de punta a punta** | `docs/HANDOFF_DESARROLLO.md` — "dejar el sistema navegable de punta a punta para validación visual humana": conectar los tres flujos, resultado individual real, puntos de entrada desde la raíz | Redirección post-login por rol (bug real encontrado y corregido: el global `$Bee_User` que usa `get_user()` no se actualiza en la misma petición del login — ver 17.1); sidebar del panel admin dejó de ser el catálogo genérico de Bee y ahora es por rol; `resultadosController::individual()` implementado de verdad (identidad, calificación, desglose); enlace "aplicaciones respondidas → resultado" desde `administradorController::tokens()`; enlaces cruzados encuestado↔login; enlaces muertos removidos de `loginView.php`. Recorrido END-TO-END real con `curl` (súper usuario crea administrador → administrador crea centro y token → encuestado responde → administrador ve el resultado), datos dejados sembrados a propósito (no se limpiaron, ver sección 17.4). Sección 17 de `ARQUITECTURA.md`. |
 
-En las 9 pasadas se respetaron las mismas restricciones: **no** se ejecutó
+En las 10 pasadas se respetaron las mismas restricciones: **no** se ejecutó
 Git, **no** se modificó ningún archivo de `app/classes/*` (núcleo de Bee), y
 todo lo agregado sigue las convenciones nativas de Bee Framework 1.5.8
 (controladores `xyzController extends Controller implements ControllerInterface`,
@@ -390,6 +391,13 @@ clientes" con `(int) $filtro['orden'] === 1`, igual que hace el propio DDL.
   quedan igual — no los pidió esta tarea. Verificado end-to-end con `curl`,
   incluido el caso de alcance más exigente (dos administradores de la misma
   secretaría).
+- **Pasada 10:** `tokens()` ahora también carga
+  `aplicacionModel::por_centro_trabajo($centroTrabajoId)` (ya filtraba
+  `estado='completada'`, sin cambios en el modelo) y la pasa a la vista como
+  `aplicaciones` — cierra el lazo visual pedido: de la lista de tokens de un
+  centro se llega a las aplicaciones respondidas y de ahí a su resultado
+  individual (ver `tokensView.php` en la sección 3 y `resultadosController::individual()`
+  en 2.4).
 
 ### 2.3 `superusuarioController.php` (rol `superusuario`)
 - **Pasada 1:** creado con `index()`, `administradores()`/`post_administradores()`,
@@ -435,6 +443,37 @@ clientes" con `(int) $filtro['orden'] === 1`, igual que hace el propio DDL.
   (ver 1.8). **Por qué:** la columna `centro_trabajo_id` no existe en
   `aplicacion`; el código viejo habría lanzado un error de SQL ("Unknown
   column") en cuanto se ejecutara contra la base de datos real.
+- **Pasada 10:** `individual()` implementado de verdad — carga
+  `aplicacionModel::by_id()`, `guiaModel::by_id()`,
+  `resultadoModel::por_aplicacion()` y `resultadoDetalleModel::por_resultado()`
+  (nombrando cada renglón con `categoriaModel::by_id()`/`dominioModel::by_id()`),
+  registra `consulta_resultado_individual` en la bitácora, y calcula un
+  `volver_url` según el rol (administrador → `administrador/tokens/{centro}`;
+  súper usuario → su propio tablero, no tiene todavía una página por centro).
+  `verificarAccesoCentroTrabajo()` y el guard de "sin rol" del constructor
+  dejaron de redirigir a `DEFAULT_CONTROLLER` (el formulario público del
+  encuestado) y ahora usan `ruta_tablero_segun_rol()` — **por qué:** un
+  usuario con sesión de Bee activa que pide un resultado fuera de su alcance
+  no debería terminar expulsado al flujo público, sino de vuelta en su
+  propio tablero (ver sección 17.1).
+
+### 2.5 `loginController.php` (nativo de Bee, sin tocar hasta esta pasada)
+- **Pasada 10:** `post_login()` y el guard del constructor ("ya hay sesión
+  abierta") dejaron de redirigir siempre a `admin`/`admin/perfil` (el panel
+  demo nativo de Bee) — ahora van al tablero real según el rol de contexto.
+  **Hallazgo real durante la implementación:** `ruta_tablero_segun_rol()` no
+  sirve dentro de `post_login()` porque depende de `get_user()`, que lee el
+  global `$Bee_User` — y Bee sólo llena ese global UNA VEZ por petición,
+  ANTES de despachar el controlador (`Bee::init_authentication()`); un login
+  que ocurre a la mitad de esa misma petición no lo actualiza, así que
+  `obtener_usuario_actual()` seguía viendo "sin sesión" inmediatamente
+  después de `Auth::login()` y el redirect caía siempre al `default` ('admin').
+  Se verificó el síntoma en vivo con `curl` (el súper usuario de prueba
+  terminaba en `/admin` en vez de `/superusuario`) antes de diagnosticar la
+  causa. Se resolvió agregando `ruta_tablero_para_rol($rol)` (variante
+  parametrizada, ver sección 4) y resolviendo el rol directamente contra
+  `usuarioModel::by_bee_user_id($user['id'])` en `post_login()`, sin pasar
+  por el global. Ver sección 17.1 para el detalle completo.
 
 ---
 
@@ -503,6 +542,33 @@ completo después; los únicos ajustes fueron:
   (Pasada 9): sin cambios — ya capturaban/mostraban exactamente lo que pide
   el flujo real (token+nombre+numero_servidor_publico; confirmación sin
   mostrar el resultado).
+- **`templates/includes/admin/sidebar.php`** (Pasada 10): dejó de ser el
+  catálogo genérico de Bee (Creator, Componentes, Usuarios, Productos,
+  Addons) mostrado tal cual a cualquier usuario del panel admin, y ahora
+  rama por `obtener_rol_usuario_actual()`: administrador ve Dashboard +
+  Centros de trabajo + Resultados; súper usuario ve Dashboard +
+  Administradores + Bitácora + Resultados; una cuenta sin rol de contexto
+  (ej. el usuario demo nativo "bee") sigue viendo el catálogo original sin
+  cambios. **Por qué era necesario:** antes de este cambio, el panel de
+  administrador/súper usuario no tenía NINGÚN enlace a sus propias
+  funcionalidades reales — sólo eran alcanzables tecleando la URL a mano.
+  También se corrigió el enlace del logo (antes iba siempre a
+  `DEFAULT_CONTROLLER`, el formulario público, incluso con sesión de
+  admin/súper usuario activa) para que vaya al tablero del rol en sesión.
+- **`templates/views/login/loginView.php`** (Pasada 10): se quitaron los
+  hints "Ingresa bee"/"Ingresa 123456" (credenciales del demo nativo de Bee,
+  ya no válidas — este sistema usa cuentas reales) y los enlaces
+  "¿Olvidaste tu contraseña?" (apuntaba a sí mismo, no existe flujo de
+  recuperación) y "Crear nueva cuenta" (`bee/generate-user`, auto-registro
+  que no encaja con este sistema — las cuentas se dan de alta desde
+  bootstrap/súper usuario, nunca por el usuario final). Se agregó un enlace
+  secundario de vuelta al acceso del encuestado.
+- **`templates/views/cuestionario/accesoView.php`** (Pasada 10): se agregó
+  un enlace discreto "Acceso administrativo" hacia `/login` — **por qué:**
+  la raíz del sitio (formulario del encuestado) no tenía ningún punto de
+  entrada visible hacia el login administrativo; se mantiene deliberadamente
+  secundario/pequeño para "no mezclar los accesos" (instrucción explícita
+  del prompt).
 
 ---
 
@@ -554,6 +620,16 @@ extendió aquí en vez de tocar `app/classes/*`.
   sigue sin ser parámetro de la función y sigue siendo opcional (`null` si
   no está disponible, la columna admite `NULL`); el guard de `usuario_id`
   de la Pasada 3 no se tocó.
+- **Pasada 10:** se agregaron `ruta_tablero_para_rol($rol)` y
+  `ruta_tablero_segun_rol()` (ver docblocks en el archivo para el porqué de
+  tener las dos variantes — resume la sección 17.1: `ruta_tablero_segun_rol()`
+  no sirve dentro de `loginController::post_login()` por el global `$Bee_User`
+  que sólo se llena una vez por petición, antes del login). Se modificó
+  `requiere_rol()`: cuando el rol NO coincide, ahora redirige a
+  `ruta_tablero_segun_rol()` en vez de `DEFAULT_CONTROLLER` — **por qué:**
+  expulsar al formulario público a alguien con una sesión de Bee activa
+  pero el rol equivocado es una pérdida de contexto de navegación
+  innecesaria; lo correcto es devolverlo a su propio tablero.
 
 ---
 
@@ -1060,7 +1136,7 @@ conservadora.
 
 ---
 
-## 15. Restricciones respetadas en las 9 pasadas
+## 15. Restricciones respetadas en las 10 pasadas
 
 - **Cero comandos de Git ejecutados por Claude.** Cuando el usuario pidió
   los 6 commits segmentados, Claude entregó los comandos como texto para que
@@ -1072,12 +1148,15 @@ conservadora.
 - **Los dos únicos archivos "existentes" del núcleo/framework que se
   modificaron** siguen siendo los que Bee reserva para el proyecto:
   `app/functions/bee_custom_functions.php` y `templates/includes/styles.php`
-  (secciones 4 y 5). Las pasadas 6, 7, 8 y 9 no agregaron un tercero:
+  (secciones 4 y 5). Las pasadas 6-10 no agregaron un tercero:
   `scripts/` es una carpeta nueva, fuera de `app/` y `templates/`, sin
-  rutas ni controlador propio.
+  rutas ni controlador propio. La Pasada 10 sí agregó funciones nuevas a
+  `bee_custom_functions.php` (`ruta_tablero_para_rol()`,
+  `ruta_tablero_segun_rol()`) y modificó `requiere_rol()` — sigue siendo el
+  mismo archivo, el punto de extensión reservado por Bee para el proyecto.
 - **`docs/DDL/ddl.sql`** se modificó tres veces (Pasada 3, Pasada 4 y
-  Pasada 8), con autorización explícita en las tres. En las pasadas 6, 7 y
-  9 se leyó como fuente de verdad del esquema y **no** se tocó (incluido el
+  Pasada 8), con autorización explícita en las tres. En las pasadas 6, 7, 9
+  y 10 se leyó como fuente de verdad del esquema y **no** se tocó (incluido el
   hallazgo de `ON DELETE RESTRICT` en `auditoria.usuario_id` de la Pasada
   7, que se resolvió cambiando el diseño de la aplicación, no el esquema).
   En la Pasada 8 el `ALTER TABLE` correspondiente se entregó como archivo
@@ -1091,7 +1170,8 @@ conservadora.
 - **`php -l` en cada archivo tocado, en cada pasada, incluida ésta** (2
   modelos, 1 controlador, 2 vistas, 2 scripts en la Pasada 7; 2 modelos,
   2 controladores, 3 vistas, 1 SQL en la Pasada 8; 2 modelos, 1 controlador,
-  3 vistas en la Pasada 9).
+  3 vistas en la Pasada 9; 1 función auxiliar, 3 controladores, 5 vistas/includes
+  en la Pasada 10).
 - **La Pasada 7 sí insertó y borró datos reales en la BD del usuario**
   (datos de prueba desechables, para la verificación por `curl` de 13.3) —
   pero **no** dejó nada permanente: se confirmó con `SELECT COUNT(*)` que
@@ -1111,6 +1191,18 @@ conservadora.
   bloqueada por el guard ≤15 antes de crear nada), todo limpiado al final y
   confirmado con `SELECT COUNT(*)` en 0, con el instrumento sembrado (2
   guías, 118 reactivos, 145 umbrales, etc.) verificado intacto después.
+- **La Pasada 10 es la ÚNICA que NO limpió sus datos de prueba — a propósito,
+  por instrucción explícita del usuario** ("NO borres los datos de esta
+  prueba: déjalos sembrados para que YO pueda hacer el mismo recorrido a
+  mano en el navegador"). Se aplicó el bootstrap del súper usuario que la
+  Pasada 7 había dejado listo pero sin ejecutar
+  (`scripts/bootstrap_superusuario.sql` — sigue siendo un `INSERT`, no un
+  cambio de esquema) y, desde ahí, se recorrió el flujo completo con
+  peticiones HTTP reales (no inserciones directas a la base de datos) para
+  también ejercitar los controladores reales, no sólo los datos. Las
+  credenciales y el token quedaron documentados en la sección 17.4 para el
+  usuario. El `ALTER TABLE` de `usuario.estado` (Pasada 8) sigue sin
+  ejecutarse — eso no cambió.
 - **Se reinició MariaDB y Apache localmente** durante la Pasada 7 (13.3,
   incidente) — acción de infraestructura local de desarrollo, no
   destructiva (se confirmó integridad de datos antes/después), no
@@ -1217,3 +1309,149 @@ Casos verificados:
   calificación ni el nivel de riesgo calculados — el handoff es explícito en
   que el resultado es para administrador/súper usuario, no para el
   encuestado.
+
+---
+
+## 17. Pasada 10 — navegación de punta a punta (2026-09-24)
+
+Prompt recibido de "mi agente": el objetivo NO eran funcionalidades nuevas,
+era dejar el sistema **navegable con clics reales** para validación visual
+humana — conectar los tres flujos ya construidos (encuestado, administrador,
+súper usuario), una vista mínima de resultado individual real, y puntos de
+entrada claros desde la raíz del sitio.
+
+### 17.1 El bug real: redirección post-login y el global `$Bee_User`
+
+El primer paso fue el más importante: `loginController::post_login()`
+redirigía **siempre** a `admin` (el panel demo nativo de Bee), sin importar
+el rol del usuario que acababa de iniciar sesión — nunca llevaba a un
+administrador o súper usuario a su propio tablero. El guard "ya hay sesión
+abierta" del constructor tenía el mismo problema, hacia `admin/perfil`.
+
+Al corregirlo con una función centralizada (`ruta_tablero_segun_rol()`,
+sección 4) apareció un segundo bug, más sutil, que sólo se manifestaba
+probando el login de verdad con `curl` (no se habría detectado leyendo el
+código):
+
+- `get_user()` (núcleo de Bee, `bee_core_functions.php`) NO lee
+  `$_SESSION['user_session']['user']` directamente — lee el global
+  `$Bee_User`, poblado UNA SOLA VEZ por petición, en
+  `Bee::init_authentication()`, **antes** de que se despache el controlador.
+  El comentario original en el código explica que esto es intencional (para
+  reflejar cambios en la BD sin tener que cerrar sesión), pero tiene una
+  consecuencia no documentada: un `Auth::login()` que ocurre a la mitad de
+  la petición (como dentro de `post_login()`) actualiza `$_SESSION`, pero
+  **no** actualiza el global `$Bee_User` — ese ya se leyó al principio de la
+  petición, cuando todavía no había sesión.
+- Resultado observado: `obtener_usuario_actual()` (que depende de
+  `get_user('id')`) regresaba `[]` inmediatamente después de un login
+  exitoso, así que `obtener_rol_usuario_actual()` regresaba `null`, y
+  `ruta_tablero_segun_rol()` caía siempre a su valor por defecto (`admin`) —
+  el mismo síntoma que el bug original, con una causa distinta y más
+  profunda.
+- **Solución:** se separó la función en dos (`ruta_tablero_para_rol($rol)` +
+  `ruta_tablero_segun_rol()`, ver sección 4) y `post_login()` resuelve el
+  rol **directamente contra la base de datos** con
+  `usuarioModel::by_bee_user_id($user['id'])`, sin pasar por
+  `get_user()`/el global. Verificado con `curl`: login del súper usuario de
+  prueba → `Location: .../superusuario` (antes: `.../admin`).
+
+Este mismo hallazgo se aprovechó para corregir `requiere_rol()` y
+`resultadosController::verificarAccesoCentroTrabajo()` (sección 4/2.4): ya
+NO usan este atajo (corren en peticiones normales donde `$Bee_User` sí está
+poblado correctamente), así que sí pueden usar `ruta_tablero_segun_rol()` —
+la diferencia importante es que ya no expulsan a un usuario con sesión
+activa pero rol/alcance equivocado hacia el formulario público del
+encuestado, sino de vuelta a su propio tablero.
+
+### 17.2 Sidebar sin ningún enlace real (el segundo hallazgo grande)
+
+`templates/includes/admin/sidebar.php` — compartido por
+`administrador`/`superusuario`/`resultados` vía `dashboardTop.php` — seguía
+siendo el catálogo genérico de la plantilla SB Admin 2 de Bee (Creator,
+Componentes, Usuarios, Productos, Addons): **cero enlaces** a Centros de
+trabajo, Tokens, Administradores o Bitácora. Cualquiera de esos módulos sólo
+era alcanzable tecleando la URL exacta a mano; no había forma de
+"navegar" hacia ellos desde el panel. Se reescribió para ramificar por
+`obtener_rol_usuario_actual()` (detalle en sección 3), preservando el
+catálogo original sin cambios para una cuenta de Bee sin rol de contexto
+(no se quería romper la demo nativa).
+
+### 17.3 Resultado individual real + enlace desde el listado del administrador
+
+`resultadosController::individual()` pasó de TODO a real (identidad, guía,
+calificación final + nivel de riesgo, desglose por categoría y dominio, ver
+sección 2.4), y `administradorController::tokens()` ahora también carga las
+aplicaciones completadas de ese centro (`aplicacionModel::por_centro_trabajo()`,
+sin cambios — ya filtraba `estado='completada'`) con un enlace "Ver
+resultado" por fila hacia `resultados/individual/{id}` (sección 2.2/3).
+
+**Bug encontrado y corregido durante la verificación con datos reales (no se
+habría visto sólo leyendo el código):** la primera versión de
+`individualView.php` accedía a `$d->aplicacion['nombre']`,
+`$d->resultado['calificacion_final']`, `$fila['nivel_agregacion']`, etc.
+(sintaxis de arreglo asociativo) y produjo un **Fatal error** ("Cannot use
+object of type stdClass as array") en cuanto se probó con una aplicación
+real. **Causa:** `View::renderBeeTemplate()` (núcleo de Bee) convierte todo
+`$data` a objetos con `json_decode(json_encode($data))` antes de exponerlo
+como `$d` — las filas que vienen de un modelo (arreglos asociativos)
+terminan siendo `stdClass`, no arreglos, dentro de la vista (mismo criterio
+que ya usan `$centro->nombre`, `$token->estado`, etc. en las vistas de
+Pasada 7/8, que esta vista nueva no siguió al escribirse). Se corrigió toda
+la vista a `->` y se volvió a verificar con la misma aplicación real: la
+página cargó completa (identidad, calificación `95`, badges de nivel por
+categoría/dominio).
+
+### 17.4 Verificación end-to-end real (recorrido completo, datos dejados sembrados a propósito)
+
+Se recorrió el camino completo con peticiones HTTP reales (`curl`, no
+inserciones directas a la base de datos salvo el paso 1, que es la única
+excepción justificada abajo). A diferencia de las pasadas 6-9, **esta vez
+los datos NO se borraron** — instrucción explícita del usuario, para poder
+repetir el mismo recorrido a mano en el navegador.
+
+1. **Cuenta raíz del súper usuario:** se aplicó el `INSERT` que
+   `scripts/bootstrap_superusuario.sql` (Pasada 7) ya había dejado listo
+   pero que el usuario todavía no había ejecutado — sigue siendo un
+   `INSERT` puro (secretaría + `bee_users` + `usuario`), no un cambio de
+   esquema, así que cae dentro de lo ya permitido. Se usó tal cual estaba
+   preparado (usuario `superadmin`, contraseña `INyT0jkl`) en vez de
+   inventar una cuenta de prueba nueva, para no dejar dos "cuentas raíz"
+   distintas dando vueltas.
+2. **Login del súper usuario** → verificado el redirect a `/superusuario`
+   (17.1).
+3. **Alta de un administrador real** vía `POST superusuario/post_administradores`
+   (no inserción directa) — usuario `admintest1`.
+4. **Login del administrador** → verificado el redirect a `/administrador`.
+5. **Alta de un centro de trabajo real** (25 trabajadores, GRII) vía
+   `POST administrador/post_centros_trabajo`.
+6. **Generación de un token real** vía `POST administrador/post_tokens`,
+   vigente 30 días.
+7. **El encuestado responde el cuestionario completo** con ese token
+   (`cuestionario/post_acceso` → `responder` → `post_responder`), las 46
+   preguntas de GRII con respuestas variadas (no todo "Siempre", para que
+   el resultado se viera realista) y ambas preguntas-filtro en "Sí".
+8. **El administrador ve el resultado** en `administrador/tokens/8` (la
+   aplicación aparece en "Aplicaciones respondidas") y en
+   `resultados/individual/10` (calificación `95`, `muy_alto`, desglose por
+   categoría y dominio).
+9. Se confirmó en la bitácora del súper usuario (`superusuario/bitacora`)
+   que las 4 acciones (`alta_administrador`, `alta_centro_trabajo`,
+   `generar_token`, `consulta_resultado_individual`) quedaron registradas.
+10. Se verificaron los dos guards de rol corregidos en 17.1: el
+    administrador de prueba pidiendo `/superusuario` fue rebotado a
+    `/administrador` (no al formulario público); el súper usuario de prueba
+    pidiendo `/administrador/centros_trabajo` fue rebotado a
+    `/superusuario`.
+
+**Credenciales y token dejados sembrados para la revisión manual del
+usuario** (ver también el mensaje final de esta pasada en el chat):
+súper usuario `superadmin` / `INyT0jkl`; administrador `admintest1` /
+`AdminTest123!`; token del centro "Museo Regional de Toluca" (id 8):
+`2b7be7ba058d693f8f0ce58e4f9e8b29` (vigente 30 días desde 2026-09-23); la
+aplicación de prueba ("Maria Lopez Encuestada", SP-FINAL-01) ya quedó
+respondida con resultado calculado, así que ese token específico ya no
+puede volver a usarse para responder (RF-11, una aplicación por token +
+número de servidor público) — el usuario puede generar un token nuevo desde
+el panel del administrador para probar el flujo del encuestado de nuevo si
+lo quiere.
