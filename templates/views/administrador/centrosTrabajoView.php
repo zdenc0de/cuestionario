@@ -38,7 +38,6 @@
         <h6 class="m-0 font-weight-bold text-primary">Mis centros de trabajo</h6>
       </div>
       <div class="card-body">
-        <!-- TODO (fase de Desarrollo): tabla con $d->centros (centroTrabajoModel::por_administrador()) -->
         <div class="table-responsive">
           <table class="table table-bordered" width="100%">
             <thead>
@@ -46,15 +45,38 @@
                 <th>Nombre</th>
                 <th># Trabajadores</th>
                 <th>Guía asignada</th>
-                <th>Tokens</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
-              <!-- TODO: foreach ($d->centros as $centro): ... endforeach; -->
-              <tr>
-                <td colspan="5" class="text-center text-muted">Sin registros (pendiente de implementación).</td>
-              </tr>
+              <?php if (empty($d->centros)): ?>
+                <tr>
+                  <td colspan="4" class="text-center text-muted">Aún no has dado de alta ningún centro de trabajo.</td>
+                </tr>
+              <?php else: ?>
+                <?php foreach ($d->centros as $centro): ?>
+                  <tr>
+                    <td><?php echo htmlspecialchars($centro->nombre); ?></td>
+                    <td><?php echo (int) $centro->num_trabajadores; ?></td>
+                    <td>
+                      <?php if (!empty($centro->guia_clave)): ?>
+                        <span class="badge bg-primary" title="<?php echo htmlspecialchars($centro->guia_nombre ?? ''); ?>">
+                          <?php echo htmlspecialchars($centro->guia_clave); ?>
+                        </span>
+                      <?php else: ?>
+                        <!-- En la práctica esto no debería pasar: post_centros_trabajo() ya
+                             impide crear un centro de ≤15 trabajadores (RF-00) -->
+                        <span class="badge bg-secondary">No aplica</span>
+                      <?php endif; ?>
+                    </td>
+                    <td>
+                      <a href="<?php echo get_base_url(); ?>administrador/tokens/<?php echo $centro->id; ?>" class="btn btn-sm btn-outline-primary">
+                        Tokens
+                      </a>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              <?php endif; ?>
             </tbody>
           </table>
         </div>
