@@ -796,3 +796,58 @@ que la Pasada 7), con datos desechables, limpiados al final.
   esta tarea (que pide generar tokens directamente vía `tokens()`/`post_tokens()`,
   ya cubre el caso de uso de "habilitar").
 - `editar_centro_trabajo()` sigue como stub.
+
+## 16. Flujo del encuestado (2026-09-24)
+
+Cuarta tarea de desarrollo: `cuestionarioController` (módulo **público**,
+sin cuenta de Bee) implementado de verdad, cerrando la cadena hasta el
+motor de calificación de la sección 13. Ver `docs/BITACORA_CAMBIOS.md`
+sección 16 para el detalle completo (código, verificación end-to-end con
+`curl` y los dos casos calculados a mano); aquí sólo el diseño.
+
+### 16.1 Cómo se controla el acceso sin cuenta de Bee
+
+El token es multiuso por centro de trabajo (decisión de diseño B): varios
+encuestados pueden usar el mismo código a la vez, así que la URL
+`responder/{token}` no identifica por sí sola "de quién" es el cuestionario
+en curso. Se resuelve con la **sesión nativa de PHP** (ya activa en cada
+petición vía `Bee::init_set_up()` -> `session_start()`, no `Auth`/Bee):
+
+- `post_acceso()` valida el token (`tokenModel::esta_vigente()`), el guard
+  ≤15 (defensa en profundidad — en condiciones normales nunca dispara
+  porque `administradorController::post_centros_trabajo()` ya impide crear
+  esos centros) y la unicidad (`aplicacionModel::existe_para_token_y_servidor_publico()`).
+  Si todo pasa, crea la `aplicacion` (`estado='en_progreso'`) y guarda su id
+  en `$_SESSION['cuestionario']`.
+- `responder()`/`post_responder()` revalidan esa sesión contra el token de
+  la URL/formulario en el método privado `aplicacionEnCurso($token)` —
+  mismo patrón "falla cerrado" que
+  `resultadosController::verificarAccesoCentroTrabajo()` (sección 7).
+- Unicidad literal: "una sola aplicación por (token, numero_servidor_publico)"
+  se aplica sin importar si la aplicación previa quedó `'en_progreso'` o
+  `'completada'` — no existe un flujo de "reanudar", no se pidió y no hay
+  forma de verificar identidad sin cuenta.
+
+### 16.2 Lógica condicional de las preguntas-filtro (RF-02)
+
+`pregunta_filtro.orden` es la clave semántica (1=clientes, 2=jefe, ver
+`docs/DDL/ddl.sql`) — no existe una columna de "tipo" separada. El nuevo
+`preguntaFiltroModel::por_guia($guiaId)` regresa las dos filas de una guía
+ordenadas por `orden`; el controlador arma el `name` del campo
+(`atiende_clientes`/`es_jefe`) y decide qué bloque de reactivos
+condicionales incluir con `(int) $filtro['orden'] === 1`.
+`post_responder()` reconstruye el set exacto de reactivos que debían
+responderse (obligatorios + condicionales habilitados) y exige que TODOS
+tengan una opción real seleccionada antes de guardar nada — los reactivos
+de un filtro en "No" ni se piden ni se guardan, no hace falta "restarlos"
+en ningún lado (mismo criterio que ya usa `resultadoModel::calcular_para_aplicacion()`
+con los reactivos que simplemente no tienen fila en `respuesta`).
+
+### 16.3 Cálculo en tiempo real (RNF-06)
+
+`post_responder()` guarda las respuestas, marca la aplicación
+`'completada'` y llama a `resultadoModel::calcular_para_aplicacion()` en el
+mismo request — el resultado queda calculado y persistido antes de mostrar
+la pantalla de agradecimiento, que a propósito **no** muestra la
+calificación ni el nivel de riesgo (eso es para administrador/súper
+usuario, no para el encuestado).

@@ -2,21 +2,21 @@
 
 > Documento de auditoría: enumera **todos** los archivos creados o modificados
 > por el agente Claude en este proyecto hasta el 2026-09-24, en qué momento
-> (de 8 pasadas de trabajo) y **por qué**, para que otro agente/desarrollador
+> (de 9 pasadas de trabajo) y **por qué**, para que otro agente/desarrollador
 > pueda revisarlo contra el código real. No repite la explicación funcional
 > de cada módulo (eso ya está en `docs/ARQUITECTURA.md`); aquí el foco es
 > **el cambio puntual y su justificación**.
 >
 > Contexto de repositorio en el momento de escribir esto: rama `main`, HEAD
 > en `5b2335e` ("docs: documenta el bootstrap y el modulo de superusuario
-> (Pasada 7)"). La Pasada 8 (este documento) está en el working tree, sin
-> commitear todavía. Claude no ejecutó ningún comando de Git en ningún
+> (Pasada 7)"). Las Pasadas 8 y 9 (este documento) están en el working tree,
+> sin commitear todavía. Claude no ejecutó ningún comando de Git en ningún
 > momento; los commits fueron corridos por el usuario con comandos que
 > Claude únicamente redactó como texto.
 
 ---
 
-## 0. Las 8 pasadas de trabajo
+## 0. Las 9 pasadas de trabajo
 
 | Pasada | Disparador | Qué produjo |
 |---|---|---|
@@ -28,8 +28,9 @@
 | **6. Motor de calificación** | `docs/HANDOFF_DESARROLLO.md` §5 — primera tarea de desarrollo real | 4 modelos nuevos (`categoriaModel`, `dominioModel`, `umbralModel`, `resultadoDetalleModel`), `resultadoModel::calcular_para_aplicacion()` implementado de verdad (ya no es un stub), script de verificación, corrida y confirmada contra la BD real (0 fallos), sección 13 de `ARQUITECTURA.md`. |
 | **7. Súper usuario** | `docs/HANDOFF_DESARROLLO.md` §3-4 — segunda tarea: cuenta raíz + módulo de súper usuario | Bootstrap SQL real (`scripts/bootstrap_superusuario.sql`, hash calculado con la fórmula real de Bee) + generador reutilizable; `superusuarioController` implementado (alta/listado de administradores, revocación, bitácora, alcance por secretaría); todo verificado con `curl` contra el servidor local real, no sólo con `php -l`. Sección 14 de `ARQUITECTURA.md`. |
 | **8. Administrador** | `docs/HANDOFF_DESARROLLO.md` §3-4 — cierra la limitación de la Pasada 7 (`usuario.estado`) + tercera tarea: módulo de administrador | `scripts/alter_usuario_estado.sql` (para que el usuario lo corra, Claude no lo ejecutó) + código ya preparado para antes/después de aplicarlo; `administradorController` implementado (alta de centros con el guard ≤15, listado, generación/listado/revocación de tokens con `bin2hex(random_bytes())`); alcance por `administrador_id` (más estricto que por secretaría) verificado en vivo con dos administradores de la MISMA secretaría. Sección 15 de `ARQUITECTURA.md`. |
+| **9. Encuestado** | `docs/HANDOFF_DESARROLLO.md` §3-4 — cuarta tarea: flujo completo del encuestado (`cuestionarioController`), cierra la cadena hasta el motor de calificación de la Pasada 6 | `preguntaFiltroModel` (nuevo) + 2 métodos JOIN en `reactivoModel`; `cuestionarioController` implementado de verdad (acceso por token, sesión nativa de PHP para ligar el flujo sin cuenta de Bee, lógica condicional de las preguntas-filtro, validación de completitud, cálculo automático del resultado al enviar); `cuestionarioView.php` reescrita para usar datos reales del instrumento. Verificado end-to-end con `curl` contra datos REALES capturados por el flujo (no inyectados), ambas guías, calificación confirmada a mano. Sección 16 de `ARQUITECTURA.md`. |
 
-En las 8 pasadas se respetaron las mismas restricciones: **no** se ejecutó
+En las 9 pasadas se respetaron las mismas restricciones: **no** se ejecutó
 Git, **no** se modificó ningún archivo de `app/classes/*` (núcleo de Bee), y
 todo lo agregado sigue las convenciones nativas de Bee Framework 1.5.8
 (controladores `xyzController extends Controller implements ControllerInterface`,
@@ -165,6 +166,14 @@ a como se creó originalmente.
   `posicion`) que estaba implícita en `opcion_respuesta.posicion` + la
   notación "(4→0)"/"(0→4)" de `docs/norma/Transcripcion_GuiaIII_NOM-035.md`,
   para no duplicarla entre `respuestaModel` y `resultadoModel`.
+- **Pasada 9:** se agregaron `obligatorios_por_guia_con_categoria($guiaId)` y
+  `condicionales_por_filtro_con_categoria($preguntaFiltroId)` — mismos JOIN
+  que `obligatorios_por_guia()`/`condicionales_por_filtro()` pero agregando
+  `categoria.nombre` (alias `categoria_nombre`). **Por qué:**
+  `cuestionarioController::responder()` necesitaba el nombre de la categoría
+  para agrupar visualmente las preguntas en la vista; no se modificaron los
+  métodos existentes (los sigue usando `post_responder()`, que sólo necesita
+  los ids, no el nombre) para no traer un JOIN de más donde no hace falta.
 
 ### 1.7 `opcionRespuestaModel.php`
 - **Pasada 1:** creado con columnas `texto`/`valor`/`orden`.
@@ -175,6 +184,9 @@ a como se creó originalmente.
   **Por qué:** sin esa aclaración, alguien podría asumir que `posicion` ya
   es el puntaje final y calcular mal RF-05 para los reactivos de polaridad
   `'invertida'`.
+- **Pasada 9:** sin cambios de código — `escala()` ya traía exactamente lo
+  que necesitaba `cuestionarioController::responder()` (id real de cada
+  opción, usado como `value` del radio en la vista, no un id 1-5 inventado).
 
 ### 1.8 `aplicacionModel.php`
 - **Pasada 1:** creado con `centro_trabajo_id` (columna propia),
@@ -197,6 +209,11 @@ a como se creó originalmente.
     (no existe; se usa `updated_at` implícitamente). **Por qué:** son los
     nombres/valores reales de `ddl.sql`; el anterior `'completado'` habría
     fallado contra el `ENUM('en_progreso','completada')` real.
+- **Pasada 9:** sin cambios de código — `insertOne()`,
+  `existe_para_token_y_servidor_publico()` y `update_by_id()` (para marcar
+  `estado='completada'` + `atiende_clientes`/`es_jefe` en un solo UPDATE) ya
+  cubrían todo lo que `cuestionarioController` necesitaba. Verificado con
+  datos reales, ver sección 16.2.
 
 ### 1.9 `resultadoModel.php`
 - **Pasada 1:** creado con `calificacion_final DECIMAL(6,2)` y columnas
@@ -227,6 +244,10 @@ a como se creó originalmente.
   `resultadoModel::calcular_para_aplicacion()` en la fase de Desarrollo.
 - **Pasada 6:** sin cambios — `por_aplicacion()` ya traía exactamente lo que
   el motor de calificación necesitaba, confirmado al usarlo de verdad.
+- **Pasada 9:** sin cambios de código — `insertar_lote()` (bucle de
+  `insertOne()`) fue suficiente para persistir las respuestas capturadas por
+  el flujo real; el TODO de envolverlo en una transacción sigue pendiente
+  (no se tocó, está fuera del alcance pedido en esta pasada).
 
 ### 1.11 `auditoriaModel.php`
 - **Pasada 1:** creado con columnas `ip VARCHAR(45)` y `creado DATETIME`.
@@ -267,6 +288,14 @@ CRUD mínimo: `insertOne`, `by_id`, `por_resultado($resultadoId)`. **Nota:**
 modelo dentro de su transacción manual — ver 1.9 y sección 12.2 para el
 porqué (usaría `transaction=true` por default y comitearía a medio camino).
 
+### 1.16 `preguntaFiltroModel.php` (nuevo, Pasada 9)
+Sólo lectura: `by_id`, `por_guia($guiaId)` (las dos preguntas-filtro de una
+guía, ordenadas por `orden`). **Por qué `orden` y no una columna de "tipo"
+separada:** `docs/DDL/ddl.sql` documenta `orden` como la clave semántica
+(1=clientes, 2=jefe) — no hay una columna adicional que lo distinga, así que
+el modelo no inventa una; `cuestionarioController` decide "es la pregunta de
+clientes" con `(int) $filtro['orden'] === 1`, igual que hace el propio DDL.
+
 ---
 
 ## 2. Controladores (`app/controllers/`)
@@ -291,6 +320,33 @@ porqué (usaría `transaction=true` por default y comitearía a medio camino).
   implementarlo de verdad requeriría además resolver token→centro de
   trabajo, que sigue sin existir (`tokenModel::esta_vigente()` aún es TODO);
   eso ya sería lógica nueva, fuera del alcance de este ajuste puntual.
+- **Pasada 9:** implementación real completa de las 5 rutas. `index()` sin
+  cambios (sólo el formulario de acceso). `post_acceso()`: valida
+  `tokenModel::esta_vigente()`, el guard ≤15 (defensa en profundidad, ya no
+  un TODO), `aplicacionModel::existe_para_token_y_servidor_publico()`, crea
+  la `aplicacion` (`estado='en_progreso'`) y guarda su id en
+  `$_SESSION['cuestionario']` (sesión NATIVA de PHP, no Bee/Auth — el
+  encuestado no tiene cuenta; ver docblock de la clase). `responder($token)`:
+  carga los reactivos obligatorios de la guía congelada en la aplicación
+  (`aplicacionModel.guia_id`) más los reactivos condicionales de las dos
+  preguntas-filtro (`preguntaFiltroModel::por_guia()`, ver 1.16), y la escala
+  Likert real. `post_responder()`: determina el set exacto de reactivos que
+  deben responderse según lo que se contestó en las preguntas-filtro, valida
+  que TODOS tengan una opción real seleccionada (RF-04), inserta las
+  respuestas, marca la aplicación `'completada'` y dispara
+  `resultadoModel::calcular_para_aplicacion()` en el mismo momento (RNF-06).
+  `gracias()` sin cambios — a propósito no muestra el resultado (es para
+  administrador/súper usuario, no para el encuestado). Se agregó el método
+  privado `aplicacionEnCurso($token)` (mismo patrón que
+  `resultadosController::verificarAccesoCentroTrabajo()`) para no duplicar
+  la revalidación de sesión+token+estado entre `responder()` y
+  `post_responder()`. **Nota sobre `sanitize_input()`:** a propósito NO se
+  usa `array_map('sanitize_input', $_POST)` en `post_responder()` — a
+  diferencia de los demás controladores, aquí `$_POST['respuestas']` es un
+  arreglo anidado y `sanitize_input()`/`trim()` espera un string;
+  aplicarlo tal cual habría producido un `TypeError` fatal en PHP 8.2 en
+  cuanto alguien enviara el formulario. Verificado end-to-end con datos
+  reales, ver sección 16.2.
 
 ### 2.2 `administradorController.php` (rol `administrador`)
 - **Pasada 1:** creado con `index()`, `centros_trabajo()`/`post_centros_trabajo()`,
@@ -428,6 +484,25 @@ completo después; los únicos ajustes fueron:
   agregaron los campos `fecha_inicio`/`fecha_fin` al formulario (antes no
   existían, las fechas se hubieran tenido que inventar en el controlador
   sin que el administrador pudiera elegirlas).
+- **`cuestionario/cuestionarioView.php`** (Pasada 9): la vista traía datos de
+  ejemplo "quemados" (5 preguntas y una escala Likert inventadas por el
+  diseño de la Pasada 1, más 2 reactivos de filtro ficticios `f1_1`/`f2_1`)
+  para poder validar el diseño antes de que existiera el controlador real.
+  Se reemplazaron por `$d->reactivos`/`$d->opciones`/`$d->filtros` reales —
+  **por qué:** con datos de ejemplo, el formulario habría podido "verse"
+  bien pero enviaría ids de reactivo/opción que no existen en la base de
+  datos, y `post_responder()` los habría rechazado a todos. El bloque de
+  preguntas-filtro pasó de estar duplicado a mano (uno para clientes, otro
+  para jefe) a un solo `foreach ($d->filtros as $bloque)` genérico que
+  arma el `name`/`id` del campo según `$filtro->orden` — **por qué:** cada
+  guía tiene su propio conjunto real de reactivos condicionales (3+3 en
+  GRII, 4+4 en GRIII, ver `docs/DDL/ddl.sql`), no uno solo como mostraba el
+  ejemplo. Si `$d->reactivos` llega vacío ya no se rellena con preguntas de
+  relleno: se muestra un estado vacío explícito.
+- **`cuestionario/accesoView.php`, `cuestionario/agradecimientoView.php`**
+  (Pasada 9): sin cambios — ya capturaban/mostraban exactamente lo que pide
+  el flujo real (token+nombre+numero_servidor_publico; confirmación sin
+  mostrar el resultado).
 
 ---
 
@@ -604,10 +679,12 @@ Esto **no** se hizo a propósito, no es un olvido:
   la Pasada 6** (`categoriaModel`, `dominioModel`, `umbralModel`,
   `resultadoDetalleModel`, ver sección 12.1), porque el handoff de
   Desarrollo los pidió como parte de la primera tarea (motor de
-  calificación). Siguen sin modelo `dimensionModel` y `preguntaFiltroModel`
-  — no los necesitó el motor de cálculo (usa `reactivo.dimension_id`/
-  `pregunta_filtro_id` directamente); se crearán cuando haga falta nombrar
-  esos niveles en algún reporte.
+  calificación). **`preguntaFiltroModel` creado en la Pasada 9** (ver
+  sección 1.16) — lo necesitó `cuestionarioController::responder()`/
+  `post_responder()` para resolver las dos preguntas-filtro reales de cada
+  guía. Sigue sin modelo `dimensionModel` — nadie lo ha necesitado todavía
+  (el motor de cálculo usa `reactivo.dominio_id`/`categoria_id`
+  denormalizados, nunca sube hasta `dimension`).
 - ~~No se resolvió el límite de trabajadores de la Guía II (15 vs 16)~~ —
   **resuelto en la Pasada 4:** es 16, confirmado contra el texto oficial de
   la norma; el caso ≤15 ("no requiere cuestionario") quedó documentado.
@@ -983,7 +1060,7 @@ conservadora.
 
 ---
 
-## 15. Restricciones respetadas en las 8 pasadas
+## 15. Restricciones respetadas en las 9 pasadas
 
 - **Cero comandos de Git ejecutados por Claude.** Cuando el usuario pidió
   los 6 commits segmentados, Claude entregó los comandos como texto para que
@@ -995,12 +1072,12 @@ conservadora.
 - **Los dos únicos archivos "existentes" del núcleo/framework que se
   modificaron** siguen siendo los que Bee reserva para el proyecto:
   `app/functions/bee_custom_functions.php` y `templates/includes/styles.php`
-  (secciones 4 y 5). Las pasadas 6, 7 y 8 no agregaron un tercero: `scripts/`
-  es una carpeta nueva, fuera de `app/` y `templates/`, sin rutas ni
-  controlador propio.
+  (secciones 4 y 5). Las pasadas 6, 7, 8 y 9 no agregaron un tercero:
+  `scripts/` es una carpeta nueva, fuera de `app/` y `templates/`, sin
+  rutas ni controlador propio.
 - **`docs/DDL/ddl.sql`** se modificó tres veces (Pasada 3, Pasada 4 y
-  Pasada 8), con autorización explícita en las tres. En las pasadas 6 y 7
-  se leyó como fuente de verdad del esquema y **no** se tocó (incluido el
+  Pasada 8), con autorización explícita en las tres. En las pasadas 6, 7 y
+  9 se leyó como fuente de verdad del esquema y **no** se tocó (incluido el
   hallazgo de `ON DELETE RESTRICT` en `auditoria.usuario_id` de la Pasada
   7, que se resolvió cambiando el diseño de la aplicación, no el esquema).
   En la Pasada 8 el `ALTER TABLE` correspondiente se entregó como archivo
@@ -1013,7 +1090,8 @@ conservadora.
   de Claude sin respaldo.
 - **`php -l` en cada archivo tocado, en cada pasada, incluida ésta** (2
   modelos, 1 controlador, 2 vistas, 2 scripts en la Pasada 7; 2 modelos,
-  2 controladores, 3 vistas, 1 SQL en la Pasada 8).
+  2 controladores, 3 vistas, 1 SQL en la Pasada 8; 2 modelos, 1 controlador,
+  3 vistas en la Pasada 9).
 - **La Pasada 7 sí insertó y borró datos reales en la BD del usuario**
   (datos de prueba desechables, para la verificación por `curl` de 13.3) —
   pero **no** dejó nada permanente: se confirmó con `SELECT COUNT(*)` que
@@ -1026,8 +1104,116 @@ conservadora.
   `SELECT COUNT(*)` — pero esta vez con una distinción explícita: los
   **datos** de prueba sí se insertaron/borraron en la BD local, el **ALTER
   TABLE** (cambio de esquema) no se ejecutó en absoluto, ni siquiera ahí
-  (ver 14.1/14.3).
+  (ver 14.1/14.3). **La Pasada 9 repitió el mismo patrón** para verificar el
+  flujo del encuestado de punta a punta (16.2) — dos secretarías/centros/
+  tokens de prueba (GRII y GRIII), tres aplicaciones reales respondidas vía
+  `curl` (una completa GRIII, una completa GRII con filtros en "No", una
+  bloqueada por el guard ≤15 antes de crear nada), todo limpiado al final y
+  confirmado con `SELECT COUNT(*)` en 0, con el instrumento sembrado (2
+  guías, 118 reactivos, 145 umbrales, etc.) verificado intacto después.
 - **Se reinició MariaDB y Apache localmente** durante la Pasada 7 (13.3,
   incidente) — acción de infraestructura local de desarrollo, no
   destructiva (se confirmó integridad de datos antes/después), no
   relacionada con Git ni con el código del proyecto.
+
+---
+
+## 16. Pasada 9 — flujo del encuestado (2026-09-24)
+
+Prompt recibido de "mi agente": cuarta tarea de `docs/HANDOFF_DESARROLLO.md`
+— implementar el flujo completo del encuestado (`cuestionarioController`,
+hasta ahora stubs), que cierra la cadena hasta el motor de calificación ya
+implementado en la Pasada 6 (`resultadoModel::calcular_para_aplicacion()`).
+A diferencia de los módulos de administrador/súper usuario, este flujo es
+**público**: no usa cuenta de Bee, el acceso se controla íntegramente por la
+vigencia del token.
+
+### 16.1 El problema de fondo: ¿cómo se liga una petición a "su" aplicación sin cuenta de Bee?
+
+El token es multiuso por centro de trabajo (decisión de diseño B, ver
+`tokenModel`): varios encuestados del mismo centro pueden usar el mismo
+código al mismo tiempo. Eso significa que la URL `responder/{token}` por sí
+sola no basta para saber "de quién" es el cuestionario a medio responder —
+hace falta algo que distinga a esta petición de la de cualquier otro
+encuestado con el mismo token.
+
+La solución adoptada: `post_acceso()` crea la fila `aplicacion` y guarda su
+id en la **sesión nativa de PHP** (no `Auth`/Bee — esa sesión ya está activa
+en cada petición, `Bee::init_set_up()` llama `session_start()`) bajo
+`$_SESSION['cuestionario'] = ['aplicacion_id' => ..., 'token_codigo' => ...]`.
+`responder()` y `post_responder()` revalidan esa sesión contra el token de
+la URL/formulario en el método privado `aplicacionEnCurso($token)` — si no
+coincide, si el token ya no está vigente, o si la aplicación ya está
+`'completada'`, deniega "en falso cerrado" y regresa a `index()` (mismo
+criterio que `resultadosController::verificarAccesoCentroTrabajo()`).
+**Por qué no una cuenta de Bee ni un token JWT propio:** el handoff es
+explícito en que este flujo "NO usa cuenta de Bee"; inventar un mecanismo de
+sesión propio habría sido una abstracción nueva innecesaria cuando Bee ya
+deja la sesión nativa de PHP lista para usarse.
+
+**Consecuencia de diseño (a propósito, no un descuido):** "una sola
+aplicación por (token_id, numero_servidor_publico)" se aplica de forma
+literal — si ya existe una fila `aplicacion` para esa combinación, sea
+`'en_progreso'` o `'completada'`, `post_acceso()` la bloquea con "ya
+respondiste esta campaña". No se implementó un flujo de "reanudar" un
+cuestionario a medias (el handoff no lo pidió y no hay forma de que el
+encuestado demuestre que es la misma persona sin una cuenta): si alguien
+cierra el navegador a medio responder, esa combinación queda agotada.
+
+### 16.2 Verificación end-to-end (la que faltaba)
+
+Se corrió el flujo completo contra el servidor Apache/MariaDB local real
+(no sólo `php -l`), con datos de prueba desechables (secretaría → centro de
+trabajo → token, prefijo `__TEST_E2E__`) insertados vía los modelos reales
+(mismo patrón CLI que `scripts/verificar_motor_calificacion.php`) y
+manejados con `curl` en cada paso — acceso, `responder`, envío. Todo se
+limpió al final (`DELETE` en cascada desde `aplicacion`, confirmado con
+`SELECT COUNT(*)` en 0) y se confirmó que el instrumento sembrado (2 guías,
+118 reactivos, 145 umbrales, 9 categorías, 18 dominios, 4 preguntas-filtro,
+5 opciones) quedó intacto.
+
+Casos verificados:
+- **Guía III completa (72 reactivos, ambos filtros en "Sí"):** acceso con
+  token real → 72 reactivos + 2 preguntas-filtro renderizados en
+  `responder()` (con nombres/textos reales, no de ejemplo) → envío con las
+  72 respuestas → `aplicacion.estado='completada'` → `resultado` y
+  `resultado_detalle` (15 filas: 5 categorías + 10 dominios de GRIII)
+  poblados automáticamente al enviar, sin paso manual. **Verificado contra
+  un cálculo a mano con los datos REALES capturados por el flujo** (no
+  inyectados directo a la BD como en la Pasada 6): las 72 respuestas se
+  capturaron todas en la opción "Siempre" (posición 0); con 37 reactivos de
+  polaridad `normal` y 35 `invertida` en GRIII, el esperado a mano es
+  `37×4 + 35×0 = 148` → el motor calculó exactamente `148`, nivel
+  `muy_alto` (≥140, sección 3.1 de la transcripción de la norma).
+- **Guía II completa (46 reactivos, ambos filtros en "No"):** acceso con un
+  segundo token real (centro de 30 trabajadores) → envío de únicamente los
+  40 reactivos obligatorios, dejando sin contestar los 6 condicionales
+  (3 de la pregunta-filtro de clientes, 3 de la de jefatura) → se guardaron
+  exactamente 40 `respuesta` (0 de las 6 omitidas por filtro, confirmado por
+  consulta directa) → resultado calculado correctamente: 24 reactivos
+  `normal` + 16 `invertida` entre los 40 obligatorios → esperado a mano
+  `24×4 + 16×0 = 96` → el motor calculó exactamente `96`.
+- **Envío incompleto (RF-04):** se omitió a propósito 1 de los 40 reactivos
+  obligatorios de la prueba GRII — `post_responder()` rechazó el envío con
+  "Debes responder todas las preguntas antes de enviar el cuestionario.",
+  **no insertó ninguna fila de `respuesta`** (confirmado en 0) y la
+  aplicación permaneció `'en_progreso'` (no se marcó `'completada'` a
+  medias).
+- **Doble respuesta (RF-11):** un segundo intento de acceso con el mismo
+  token y el mismo `numero_servidor_publico` ya usado se bloqueó con "Ya
+  respondiste esta campaña con ese número de servidor público." antes de
+  tocar la base de datos.
+- **Guard ≤15 (defensa en profundidad):** un token cargado "a mano" contra
+  un centro de 10 trabajadores (simulando datos inconsistentes, ya que
+  `administradorController::post_centros_trabajo()` impide crear esos
+  centros desde la aplicación) fue rechazado por `post_acceso()` con el
+  mensaje de "no requiere cuestionario conforme a la NOM-035" — **no se
+  creó ninguna fila `aplicacion`** para ese intento (confirmado en 0).
+- **Token inexistente** y **verbo GET en `post_acceso`/`post_responder`**:
+  ambos rechazados como se esperaba (el segundo por `requiere_metodo_post()`,
+  ya existente desde la Pasada 2).
+- **La pantalla de agradecimiento no filtra el resultado:** se confirmó que
+  la respuesta HTML de `post_responder`/`gracias()` no contiene la
+  calificación ni el nivel de riesgo calculados — el handoff es explícito en
+  que el resultado es para administrador/súper usuario, no para el
+  encuestado.

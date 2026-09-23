@@ -10,54 +10,13 @@
 -->
 
 <?php
-// Opciones estándar de la escala Likert (5 puntos)
-$opcionesLikert = [
-  ['id' => 1, 'texto' => 'Siempre'],
-  ['id' => 2, 'texto' => 'Casi siempre'],
-  ['id' => 3, 'texto' => 'Algunas veces'],
-  ['id' => 4, 'texto' => 'Casi nunca'],
-  ['id' => 5, 'texto' => 'Nunca']
-];
-
-// Si aún no se inyectan reactivos desde la base de datos (fase previa al seed),
-// se muestra un set representativo e interactivo para validar todo el frontend.
-$reactivosList = $d->reactivos ?? [
-  [
-    'id' => 1,
-    'numero' => 1,
-    'texto' => 'El espacio donde trabajo me permite realizar mis actividades de manera segura e higiénica.',
-    'categoria' => 'Ambiente de trabajo',
-    'filtro' => null
-  ],
-  [
-    'id' => 2,
-    'numero' => 2,
-    'texto' => 'Mi trabajo exige que esté muy concentrado.',
-    'categoria' => 'Factores propios de la actividad',
-    'filtro' => null
-  ],
-  [
-    'id' => 3,
-    'numero' => 3,
-    'texto' => 'Por la cantidad de trabajo que tengo debo quedarme tiempo adicional a mi turno.',
-    'categoria' => 'Organización del tiempo de trabajo',
-    'filtro' => null
-  ],
-  [
-    'id' => 4,
-    'numero' => 4,
-    'texto' => 'Mi trabajo me permite desarrollar nuevas habilidades.',
-    'categoria' => 'Liderazgo y relaciones en el trabajo',
-    'filtro' => null
-  ],
-  [
-    'id' => 5,
-    'numero' => 5,
-    'texto' => 'En mi trabajo recibo retroalimentación sobre mi desempeño.',
-    'categoria' => 'Entorno organizacional',
-    'filtro' => null
-  ]
-];
+// Reactivos obligatorios y opciones de la escala Likert: datos reales del
+// instrumento (reactivoModel/opcionRespuestaModel), inyectados por
+// cuestionarioController::responder(). Si llegan vacíos no se inventan
+// preguntas de relleno — se muestra un estado vacío explícito más abajo.
+$reactivosList  = $d->reactivos ?? [];
+$opcionesLikert = $d->opciones ?? [];
+$filtros        = $d->filtros ?? []; // [0] = clientes (orden 1), [1] = jefe (orden 2), ver preguntaFiltroModel
 ?>
 
 <!-- Barra de progreso flotante / sticky -->
@@ -116,21 +75,26 @@ $reactivosList = $d->reactivos ?? [
 
     <!-- Bloque de preguntas regulares -->
     <div class="space-y-4" id="preguntasContainer">
-      <?php foreach ($reactivosList as $index => $reactivo): ?>
-        <div class="card-edomex transition-all duration-200 hover:shadow-card-hover pregunta-card" data-pregunta-id="<?php echo $reactivo['id']; ?>">
-          
+      <?php if (empty($reactivosList)): ?>
+        <div class="card-edomex text-center text-sm text-gray-500">
+          No hay preguntas disponibles para este cuestionario en este momento.
+        </div>
+      <?php endif; ?>
+      <?php foreach ($reactivosList as $reactivo): ?>
+        <div class="card-edomex transition-all duration-200 hover:shadow-card-hover pregunta-card" data-pregunta-id="<?php echo $reactivo->id; ?>">
+
           <div class="flex items-start justify-between gap-3 mb-4">
             <div class="flex items-start space-x-3">
               <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-edomex-guinda-50 text-edomex-guinda text-xs font-bold font-mono flex-shrink-0 mt-0.5 border border-edomex-guinda/10">
-                <?php echo $reactivo['numero']; ?>
+                <?php echo $reactivo->numero; ?>
               </span>
               <p class="text-sm sm:text-base font-medium text-gray-900 leading-snug">
-                <?php echo htmlspecialchars($reactivo['texto']); ?>
+                <?php echo htmlspecialchars($reactivo->texto); ?>
               </p>
             </div>
-            <?php if (!empty($reactivo['categoria'])): ?>
+            <?php if (!empty($reactivo->categoria_nombre)): ?>
               <span class="hidden md:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-600 flex-shrink-0">
-                <?php echo htmlspecialchars($reactivo['categoria']); ?>
+                <?php echo htmlspecialchars($reactivo->categoria_nombre); ?>
               </span>
             <?php endif; ?>
           </div>
@@ -139,15 +103,15 @@ $reactivosList = $d->reactivos ?? [
           <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3">
             <?php foreach ($opcionesLikert as $opcion): ?>
               <label class="cursor-pointer select-none">
-                <input 
-                  type="radio" 
-                  name="respuestas[<?php echo $reactivo['id']; ?>]" 
-                  value="<?php echo $opcion['id']; ?>" 
-                  class="peer sr-only radio-respuesta" 
+                <input
+                  type="radio"
+                  name="respuestas[<?php echo $reactivo->id; ?>]"
+                  value="<?php echo $opcion->id; ?>"
+                  class="peer sr-only radio-respuesta"
                   required
                 >
                 <div class="p-2.5 sm:p-3 rounded-xl border-2 border-gray-200 text-xs sm:text-sm font-medium text-gray-700 text-center transition-all peer-checked:border-edomex-guinda peer-checked:bg-edomex-guinda-50/70 peer-checked:text-edomex-guinda peer-checked:font-bold hover:border-edomex-guinda/40 hover:bg-gray-50 flex items-center justify-center h-full">
-                  <span><?php echo $opcion['texto']; ?></span>
+                  <span><?php echo htmlspecialchars($opcion->etiqueta); ?></span>
                 </div>
               </label>
             <?php endforeach; ?>
@@ -157,111 +121,70 @@ $reactivosList = $d->reactivos ?? [
       <?php endforeach; ?>
     </div>
 
-    <!-- PREGUNTA FILTRO 1: Servicio a Clientes o Usuarios (RF-02) -->
-    <div class="card-edomex border-2 border-edomex-oro/40 bg-edomex-arena-light/20 relative overflow-hidden" id="cardFiltroClientes">
-      <div class="flex items-start space-x-3.5 mb-4">
-        <div class="w-8 h-8 rounded-lg bg-edomex-oro/20 text-edomex-cafe flex items-center justify-center text-sm font-bold flex-shrink-0">
-          <i class="fas fa-users"></i>
-        </div>
-        <div>
-          <span class="inline-block text-[11px] font-bold uppercase tracking-wider text-edomex-cafe mb-0.5">Pregunta de Clasificación</span>
-          <h4 class="text-sm sm:text-base font-semibold text-gray-900">
-            ¿En mi trabajo debo brindar servicio a clientes o usuarios?
-          </h4>
-        </div>
-      </div>
-
-      <div class="flex items-center space-x-4 max-w-xs">
-        <label class="cursor-pointer flex-1">
-          <input type="radio" name="atiende_clientes" value="1" class="peer sr-only filtro-trigger" data-target="seccionClientes">
-          <div class="py-2.5 px-4 rounded-xl border-2 border-gray-300 text-center text-sm font-semibold text-gray-700 transition-all peer-checked:border-edomex-guinda peer-checked:bg-edomex-guinda peer-checked:text-white hover:border-gray-400">
-            Sí
+    <!-- PREGUNTAS-FILTRO (RF-02): clientes (orden 1) y jefatura (orden 2).
+         Cada una habilita/oculta su propio bloque de reactivos condicionales
+         según la respuesta Sí/No — ver el script al final de esta vista. -->
+    <?php foreach ($filtros as $bloque):
+      $filtro      = $bloque->pregunta;
+      $esClientes  = (int) $filtro->orden === 1;
+      $nombreCampo = $esClientes ? 'atiende_clientes' : 'es_jefe';
+      $targetId    = $esClientes ? 'seccionClientes' : 'seccionJefe';
+      $icono       = $esClientes ? 'fa-users' : 'fa-user-tie';
+    ?>
+      <div class="card-edomex border-2 border-edomex-oro/40 bg-edomex-arena-light/20 relative overflow-hidden" id="cardFiltro<?php echo ucfirst($nombreCampo); ?>">
+        <div class="flex items-start space-x-3.5 mb-4">
+          <div class="w-8 h-8 rounded-lg bg-edomex-oro/20 text-edomex-cafe flex items-center justify-center text-sm font-bold flex-shrink-0">
+            <i class="fas <?php echo $icono; ?>"></i>
           </div>
-        </label>
-        <label class="cursor-pointer flex-1">
-          <input type="radio" name="atiende_clientes" value="0" class="peer sr-only filtro-trigger" data-target="seccionClientes" checked>
-          <div class="py-2.5 px-4 rounded-xl border-2 border-gray-300 text-center text-sm font-semibold text-gray-700 transition-all peer-checked:border-gray-600 peer-checked:bg-gray-700 peer-checked:text-white hover:border-gray-400">
-            No
-          </div>
-        </label>
-      </div>
-
-      <!-- Preguntas dependientes de Atención a Clientes (ocultas por defecto si atiende_clientes = 0) -->
-      <div id="seccionClientes" class="hidden mt-6 pt-6 border-t border-edomex-oro/30 space-y-4">
-        <div class="p-3 bg-white/80 rounded-xl border border-edomex-oro/30 text-xs text-gray-600">
-          <i class="fas fa-info-circle text-edomex-oro mr-1"></i> Responde estas preguntas adicionales sobre la atención que brindas a usuarios:
-        </div>
-
-        <div class="card-edomex bg-white pregunta-card" data-pregunta-id="f1_1">
-          <p class="text-sm font-medium text-gray-900 mb-3">
-            Atiendo a clientes o usuarios muy enojados.
-          </p>
-          <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
-            <?php foreach ($opcionesLikert as $opcion): ?>
-              <label class="cursor-pointer">
-                <input type="radio" name="respuestas[f1_1]" value="<?php echo $opcion['id']; ?>" class="peer sr-only radio-respuesta">
-                <div class="p-2.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-700 text-center peer-checked:border-edomex-guinda peer-checked:bg-edomex-guinda-50 peer-checked:text-edomex-guinda font-medium">
-                  <?php echo $opcion['texto']; ?>
-                </div>
-              </label>
-            <?php endforeach; ?>
+          <div>
+            <span class="inline-block text-[11px] font-bold uppercase tracking-wider text-edomex-cafe mb-0.5">Pregunta de Clasificación</span>
+            <h4 class="text-sm sm:text-base font-semibold text-gray-900">
+              <?php echo htmlspecialchars($filtro->texto); ?>
+            </h4>
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- PREGUNTA FILTRO 2: Jefatura de Personal (RF-02) -->
-    <div class="card-edomex border-2 border-edomex-oro/40 bg-edomex-arena-light/20 relative overflow-hidden" id="cardFiltroJefe">
-      <div class="flex items-start space-x-3.5 mb-4">
-        <div class="w-8 h-8 rounded-lg bg-edomex-oro/20 text-edomex-cafe flex items-center justify-center text-sm font-bold flex-shrink-0">
-          <i class="fas fa-user-tie"></i>
+        <div class="flex items-center space-x-4 max-w-xs">
+          <label class="cursor-pointer flex-1">
+            <input type="radio" name="<?php echo $nombreCampo; ?>" value="1" class="peer sr-only filtro-trigger" data-target="<?php echo $targetId; ?>">
+            <div class="py-2.5 px-4 rounded-xl border-2 border-gray-300 text-center text-sm font-semibold text-gray-700 transition-all peer-checked:border-edomex-guinda peer-checked:bg-edomex-guinda peer-checked:text-white hover:border-gray-400">
+              Sí
+            </div>
+          </label>
+          <label class="cursor-pointer flex-1">
+            <input type="radio" name="<?php echo $nombreCampo; ?>" value="0" class="peer sr-only filtro-trigger" data-target="<?php echo $targetId; ?>" checked>
+            <div class="py-2.5 px-4 rounded-xl border-2 border-gray-300 text-center text-sm font-semibold text-gray-700 transition-all peer-checked:border-gray-600 peer-checked:bg-gray-700 peer-checked:text-white hover:border-gray-400">
+              No
+            </div>
+          </label>
         </div>
-        <div>
-          <span class="inline-block text-[11px] font-bold uppercase tracking-wider text-edomex-cafe mb-0.5">Pregunta de Clasificación</span>
-          <h4 class="text-sm sm:text-base font-semibold text-gray-900">
-            ¿Soy jefe de otros trabajadores?
-          </h4>
-        </div>
-      </div>
 
-      <div class="flex items-center space-x-4 max-w-xs">
-        <label class="cursor-pointer flex-1">
-          <input type="radio" name="es_jefe" value="1" class="peer sr-only filtro-trigger" data-target="seccionJefe">
-          <div class="py-2.5 px-4 rounded-xl border-2 border-gray-300 text-center text-sm font-semibold text-gray-700 transition-all peer-checked:border-edomex-guinda peer-checked:bg-edomex-guinda peer-checked:text-white hover:border-gray-400">
-            Sí
+        <!-- Reactivos condicionales, ocultos por defecto (el filtro empieza en "No") -->
+        <div id="<?php echo $targetId; ?>" class="hidden mt-6 pt-6 border-t border-edomex-oro/30 space-y-4">
+          <div class="p-3 bg-white/80 rounded-xl border border-edomex-oro/30 text-xs text-gray-600">
+            <i class="fas fa-info-circle text-edomex-oro mr-1"></i> Responde estas preguntas adicionales:
           </div>
-        </label>
-        <label class="cursor-pointer flex-1">
-          <input type="radio" name="es_jefe" value="0" class="peer sr-only filtro-trigger" data-target="seccionJefe" checked>
-          <div class="py-2.5 px-4 rounded-xl border-2 border-gray-300 text-center text-sm font-semibold text-gray-700 transition-all peer-checked:border-gray-600 peer-checked:bg-gray-700 peer-checked:text-white hover:border-gray-400">
-            No
-          </div>
-        </label>
-      </div>
 
-      <!-- Preguntas dependientes de Jefatura (ocultas por defecto si es_jefe = 0) -->
-      <div id="seccionJefe" class="hidden mt-6 pt-6 border-t border-edomex-oro/30 space-y-4">
-        <div class="p-3 bg-white/80 rounded-xl border border-edomex-oro/30 text-xs text-gray-600">
-          <i class="fas fa-info-circle text-edomex-oro mr-1"></i> Responde estas preguntas adicionales sobre tus funciones de supervisión:
-        </div>
-
-        <div class="card-edomex bg-white pregunta-card" data-pregunta-id="f2_1">
-          <p class="text-sm font-medium text-gray-900 mb-3">
-            Comunico oportunamente a mis colaboradores las tareas que deben realizar.
-          </p>
-          <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
-            <?php foreach ($opcionesLikert as $opcion): ?>
-              <label class="cursor-pointer">
-                <input type="radio" name="respuestas[f2_1]" value="<?php echo $opcion['id']; ?>" class="peer sr-only radio-respuesta">
-                <div class="p-2.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-700 text-center peer-checked:border-edomex-guinda peer-checked:bg-edomex-guinda-50 peer-checked:text-edomex-guinda font-medium">
-                  <?php echo $opcion['texto']; ?>
-                </div>
-              </label>
-            <?php endforeach; ?>
-          </div>
+          <?php foreach ($bloque->reactivos as $reactivo): ?>
+            <div class="card-edomex bg-white pregunta-card" data-pregunta-id="<?php echo $reactivo->id; ?>">
+              <p class="text-sm font-medium text-gray-900 mb-3">
+                <?php echo htmlspecialchars($reactivo->texto); ?>
+              </p>
+              <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                <?php foreach ($opcionesLikert as $opcion): ?>
+                  <label class="cursor-pointer">
+                    <input type="radio" name="respuestas[<?php echo $reactivo->id; ?>]" value="<?php echo $opcion->id; ?>" class="peer sr-only radio-respuesta">
+                    <div class="p-2.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-700 text-center peer-checked:border-edomex-guinda peer-checked:bg-edomex-guinda-50 peer-checked:text-edomex-guinda">
+                      <?php echo htmlspecialchars($opcion->etiqueta); ?>
+                    </div>
+                  </label>
+                <?php endforeach; ?>
+              </div>
+            </div>
+          <?php endforeach; ?>
         </div>
       </div>
-    </div>
+    <?php endforeach; ?>
 
     <!-- Botón de Envío y Confirmación -->
     <div class="card-edomex bg-gradient-to-r from-gray-900 to-gray-800 text-white flex flex-col sm:flex-row items-center justify-between gap-4 p-6">
