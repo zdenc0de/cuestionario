@@ -96,15 +96,22 @@ class usuarioModel extends Model {
   }
 
   /**
-   * Regresa los administradores dados de alta por una secretaría
-   * TODO: implementar join con bee_users para obtener username/email
+   * Regresa los administradores dados de alta por una secretaría, con su
+   * username/email de bee_users ya incluidos (JOIN) — es lo que consume
+   * superusuarioController::administradores() para el listado (RF-09).
    *
    * @param mixed $secretariaId
    * @return array
    */
   static function administradores_por_secretaria($secretariaId)
   {
-    $sql = sprintf("SELECT * FROM %s WHERE rol = 'administrador' AND secretaria_id = :secretaria_id ORDER BY id DESC", self::$t1);
+    $sql =
+      "SELECT u.*, bu.username, bu.email
+       FROM %s u
+       INNER JOIN bee_users bu ON bu.id = u.bee_user_id
+       WHERE u.rol = 'administrador' AND u.secretaria_id = :secretaria_id
+       ORDER BY u.id DESC";
+    $sql = sprintf($sql, self::$t1);
     return ($rows = parent::query($sql, ['secretaria_id' => $secretariaId])) ? $rows : [];
   }
 

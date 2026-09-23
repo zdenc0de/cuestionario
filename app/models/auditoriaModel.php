@@ -71,4 +71,27 @@ class auditoriaModel extends Model {
     $sql = sprintf('SELECT * FROM %s WHERE usuario_id = :usuario_id ORDER BY id DESC', self::$t1);
     return ($rows = parent::query($sql, ['usuario_id' => $usuarioId])) ? $rows : [];
   }
+
+  /**
+   * Regresa la bitácora de todos los usuarios (súper usuario + sus
+   * administradores) de una secretaría, con el username de bee_users ya
+   * incluido para poder mostrar "quién" (RF-09, RF-12) — es lo que
+   * consume superusuarioController::bitacora(). Alcance: un súper usuario
+   * sólo ve la bitácora de su propia secretaria_id.
+   *
+   * @param mixed $secretariaId
+   * @return array
+   */
+  static function por_secretaria($secretariaId)
+  {
+    $sql =
+      "SELECT a.*, bu.username
+       FROM %s a
+       INNER JOIN usuario u    ON u.id = a.usuario_id
+       INNER JOIN bee_users bu ON bu.id = u.bee_user_id
+       WHERE u.secretaria_id = :secretaria_id
+       ORDER BY a.id DESC";
+    $sql = sprintf($sql, self::$t1);
+    return ($rows = parent::query($sql, ['secretaria_id' => $secretariaId])) ? $rows : [];
+  }
 }
