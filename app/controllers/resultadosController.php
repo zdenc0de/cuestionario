@@ -42,9 +42,12 @@ class resultadosController extends Controller implements ControllerInterface
 
     // Si la sesión es válida pero no tiene rol de contexto asignado
     // (usuarioModel), no hay alcance de datos posible: se deniega.
+    // ruta_tablero_segun_rol() regresa 'admin' (panel nativo de Bee) en este
+    // caso exacto — más correcto que expulsar al formulario público del
+    // encuestado a alguien que sí tiene una sesión de Bee activa.
     if (obtener_rol_usuario_actual() === null) {
       Flasher::deny(2); // 'Permisos denegados.'
-      Redirect::to(DEFAULT_CONTROLLER);
+      Redirect::to(ruta_tablero_segun_rol());
     }
 
     // Ejecutar la funcionalidad del Controller padre
@@ -91,7 +94,7 @@ class resultadosController extends Controller implements ControllerInterface
   {
     if ($centroTrabajoId === null || !in_array($centroTrabajoId, $this->centrosTrabajoPermitidos())) {
       Flasher::deny(2); // 'Permisos denegados.'
-      Redirect::to(DEFAULT_CONTROLLER);
+      Redirect::to(ruta_tablero_segun_rol());
     }
   }
 
@@ -106,8 +109,11 @@ class resultadosController extends Controller implements ControllerInterface
   }
 
   /**
-   * Resultado individual de una aplicación/encuestado (RF-13)
-   * TODO (fase de Desarrollo): cargar con resultadoModel::por_aplicacion()
+   * Resultado individual de una aplicación/encuestado (RF-13): identidad,
+   * guía, calificación final + nivel de riesgo, y el desglose por dominio y
+   * categoría (resultado_detalle). Si la aplicación todavía no tiene
+   * resultado calculado (ej. sigue 'en_progreso'), se muestra un estado
+   * vacío explícito en vez de romper — ver individualView.php.
    *
    * @param mixed $aplicacionId
    */
@@ -116,13 +122,43 @@ class resultadosController extends Controller implements ControllerInterface
     // `aplicacion` no tiene centro_trabajo_id propio (ver docs/DDL/ddl.sql):
     // se resuelve vía JOIN con `token` en aplicacionModel::centro_trabajo_id_de().
     // Falla cerrado: si la aplicación no existe, regresa null y se deniega.
-    $this->verificarAccesoCentroTrabajo(aplicacionModel::centro_trabajo_id_de($aplicacionId));
+    $centroTrabajoId = aplicacionModel::centro_trabajo_id_de($aplicacionId);
+    $this->verificarAccesoCentroTrabajo($centroTrabajoId);
 
-    // TODO: registrar_auditoria('consulta_resultado_individual', 'aplicacion', $aplicacionId) (RF-12, RNF-01)
-    // TODO: $this->addToData('resultado', resultadoModel::por_aplicacion($aplicacionId));
+    registrar_auditoria('consulta_resultado_individual', 'aplicacion', $aplicacionId); // RF-12, RNF-01
+
+    $aplicacion = aplicacionModel::by_id($aplicacionId);
+    $guia       = !empty($aplicacion) ? guiaModel::by_id($aplicacion['guia_id']) : [];
+    $resultado  = resultadoModel::por_aplicacion($aplicacionId);
+
+    $detalle = [];
+    if (!empty($resultado)) {
+      foreach (resultadoDetalleModel::por_resultado($resultado['id']) as $fila) {
+        // Nombra el renglón según a qué nivel pertenece — resultado_detalle
+        // guarda categoria_id XOR dominio_id, nunca ambos (ver docblock del
+        // modelo), así que sólo uno de los dos by_id() aplica por fila.
+        $fila['nombre'] = $fila['nivel_agregacion'] === 'categoria'
+          ? (categoriaModel::by_id($fila['categoria_id'])['nombre'] ?? '—')
+          : (dominioModel::by_id($fila['dominio_id'])['nombre'] ?? '—');
+        $detalle[]      = $fila;
+      }
+    }
+
+    // El botón "Volver" depende del rol: el administrador drilleó hasta aquí
+    // desde los tokens/aplicaciones de ESE centro (tiene esa página); el
+    // súper usuario no tiene un equivalente por centro todavía (fuera de
+    // alcance de esta tarea), así que regresa a su propio tablero.
+    $volverUrl = obtener_rol_usuario_actual() === 'administrador'
+      ? 'administrador/tokens/' . $centroTrabajoId
+      : ruta_tablero_segun_rol();
 
     $this->setTitle('Resultado individual');
     $this->addToData('aplicacion_id', $aplicacionId);
+    $this->addToData('aplicacion', $aplicacion);
+    $this->addToData('guia', $guia);
+    $this->addToData('resultado', $resultado);
+    $this->addToData('detalle', $detalle);
+    $this->addToData('volver_url', $volverUrl);
     $this->setView('individual'); // templates/views/resultados/individualView.php
     $this->render();
   }
