@@ -123,6 +123,17 @@
       ¿Tienes problemas para acceder? Contacta a la coordinación administrativa de tu centro de trabajo.
     </div>
 
+    <!--
+      Enlace secundario al login administrativo — discreto y separado del
+      CTA principal a propósito, para no mezclar los dos puntos de acceso
+      (encuestado por token vs. administrador/súper usuario por cuenta).
+    -->
+    <div class="text-center">
+      <a href="<?php echo get_base_url(); ?>login" class="text-[11px] text-gray-400 hover:text-gray-600 underline">
+        Acceso administrativo
+      </a>
+    </div>
+
   </div>
 </div>
 

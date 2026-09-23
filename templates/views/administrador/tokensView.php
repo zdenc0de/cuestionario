@@ -2,6 +2,9 @@
 
 <div class="row">
   <div class="col-12 mb-2">
+    <a href="<?php echo get_base_url(); ?>administrador/centros_trabajo" class="btn btn-outline-secondary btn-sm mb-2">
+      <i class="fas fa-arrow-left"></i> Volver a centros de trabajo
+    </a>
     <p class="text-muted mb-0">
       Centro de trabajo: <strong><?php echo isset($d->centro->nombre) ? htmlspecialchars($d->centro->nombre) : ''; ?></strong>
       (<?php echo isset($d->centro->num_trabajadores) ? (int) $d->centro->num_trabajadores : '?'; ?> trabajadores)
@@ -83,6 +86,51 @@
                       <?php else: ?>
                         <span class="text-muted small">—</span>
                       <?php endif; ?>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              <?php endif; ?>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Aplicaciones respondidas del centro de trabajo — cierra el lazo
+       visual: de aquí se llega al resultado individual de cada encuestado
+       que ya completó el cuestionario. -->
+  <div class="col-12">
+    <div class="card shadow mb-4">
+      <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">Aplicaciones respondidas</h6>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-bordered" width="100%">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Número de servidor público</th>
+                <th>Fecha de envío</th>
+                <th>Resultado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php if (empty($d->aplicaciones)): ?>
+                <tr>
+                  <td colspan="4" class="text-center text-muted">Aún no hay aplicaciones respondidas en este centro.</td>
+                </tr>
+              <?php else: ?>
+                <?php foreach ($d->aplicaciones as $aplicacion): ?>
+                  <tr>
+                    <td><?php echo htmlspecialchars($aplicacion->nombre); ?></td>
+                    <td><?php echo htmlspecialchars($aplicacion->numero_servidor_publico); ?></td>
+                    <td><?php echo htmlspecialchars($aplicacion->updated_at); ?></td>
+                    <td>
+                      <a href="<?php echo get_base_url(); ?>resultados/individual/<?php echo $aplicacion->id; ?>" class="btn btn-sm btn-outline-primary">
+                        Ver resultado
+                      </a>
                     </td>
                   </tr>
                 <?php endforeach; ?>

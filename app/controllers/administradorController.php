@@ -210,6 +210,9 @@ class administradorController extends Controller implements ControllerInterface
     $this->addToData('centro', $centro);
     $this->addToData('centro_trabajo_id', $centroTrabajoId);
     $this->addToData('tokens', tokenModel::por_centro_trabajo($centroTrabajoId));
+    // aplicacionModel::por_centro_trabajo() ya filtra estado='completada' —
+    // cierra el lazo visual: de aquí se enlaza a resultados/individual().
+    $this->addToData('aplicaciones', aplicacionModel::por_centro_trabajo($centroTrabajoId));
     $this->setTitle('Tokens de acceso');
     $this->setView('tokens'); // templates/views/administrador/tokensView.php
     $this->render();

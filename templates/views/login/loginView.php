@@ -23,16 +23,10 @@
                   <div class="col-12 mb-3 text-center">
                     <label class="form-label" for="usuario">Usuario</label>
                     <input type="text" class="form-control form-control-user" id="usuario" name="usuario" placeholder="Walter White" required>
-                    <?php if (is_demo() || is_local()) : ?>
-                      <small class="text-muted">Ingresa bee</small>
-                    <?php endif; ?>
                   </div>
                   <div class="col-12 text-center">
                     <label class="form-label" for="password">Contraseña</label>
                     <input type="password" class="form-control form-control-user" id="password" name="password" required>
-                    <?php if (is_demo() || is_local()) : ?>
-                      <small class="text-muted">Ingresa 123456</small>
-                    <?php endif; ?>
                   </div>
                 </div>
 
@@ -41,11 +35,18 @@
                 </div>
               </form>
               <hr>
+              <!--
+                Sin "¿Olvidaste tu contraseña?" ni "Crear nueva cuenta": este
+                sistema no tiene flujo de recuperación de contraseña ni
+                auto-registro — las cuentas de administrador/súper usuario se
+                dan de alta desde el bootstrap y el módulo de súper usuario,
+                no por el usuario final. Ofrecer esos enlaces sería llevar a
+                un callejón sin salida.
+              -->
               <div class="text-center">
-                <a class="small" href="login">¿Olvidaste tu contraseña?</a>
-              </div>
-              <div class="text-center">
-                <a class="small" href="<?php echo build_url('bee/generate-user'); ?>">Crear nueva cuenta</a>
+                <a class="small text-muted" href="<?php echo get_base_url(); ?>cuestionario">
+                  <i class="fas fa-arrow-left fa-fw"></i> Ir al acceso del cuestionario (encuestado)
+                </a>
               </div>
             </div>
           </div>
