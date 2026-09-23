@@ -60,13 +60,27 @@ class superusuarioController extends Controller implements ControllerInterface
   ////////////////////////////////////////////////////
 
   /**
-   * Listado de administradores de la secretaría en sesión (RF-09)
+   * Listado de administradores de la secretaría en sesión (RF-09), con
+   * filtro opcional por estado (?estado=activo|inactivo) — ver
+   * docs/DDL/ddl.sql / scripts/alter_usuario_estado.sql.
    */
   function administradores()
   {
     $usuarioActual = obtener_usuario_actual();
+    $filtroEstado  = in_array($_GET['estado'] ?? '', ['activo', 'inactivo'], true) ? $_GET['estado'] : null;
 
-    $this->addToData('administradores', usuarioModel::administradores_por_secretaria($usuarioActual['secretaria_id']));
+    try {
+      $administradores = usuarioModel::administradores_por_secretaria($usuarioActual['secretaria_id'], $filtroEstado);
+    } catch (Exception $e) {
+      // La columna `usuario.estado` todavía no existe (pendiente de que se
+      // corra scripts/alter_usuario_estado.sql) — no es motivo para tronar
+      // el listado, se degrada a mostrar todos sin filtro.
+      $filtroEstado     = null;
+      $administradores  = usuarioModel::administradores_por_secretaria($usuarioActual['secretaria_id']);
+    }
+
+    $this->addToData('administradores', $administradores);
+    $this->addToData('filtro_estado', $filtroEstado);
     $this->setTitle('Administradores');
     $this->setView('administradores'); // templates/views/superusuario/administradoresView.php
     $this->render();
@@ -200,14 +214,21 @@ class superusuarioController extends Controller implements ControllerInterface
    * Por eso "dar de baja" aquí es: invalidar la contraseña con un valor
    * aleatorio que nadie conoce (mismo algoritmo de hash que el login, vía
    * get_new_password()) — la cuenta deja de poder iniciar sesión, pero su
-   * fila y su historial de auditoría se conservan intactos.
+   * fila y su historial de auditoría se conservan intactos. **Además**
+   * (2026-09-24, cierra la limitación documentada abajo) se marca
+   * `usuario.estado = 'inactivo'` — defensa en profundidad: aunque en
+   * teoría la contraseña invalidada ya es suficiente para bloquear el
+   * login, `estado` es lo que permite marcar/filtrar visualmente en el
+   * listado, y es una segunda barrera independiente si en el futuro se
+   * agrega otro punto de entrada que no pase por password_verify().
    *
-   * LIMITACIÓN CONOCIDA (documentada, no oculta): no hay columna de estado
-   * (`activo`) en `usuario`/`bee_users` en el DDL actual, así que un
-   * administrador con el acceso revocado sigue apareciendo en el listado de
-   * administradores() sin una marca visual de "revocado". Agregar esa
-   * columna requiere modificar docs/DDL/ddl.sql, fuera del alcance de esta
-   * tarea — queda como TODO explícito para cuando se decida.
+   * LIMITACIÓN QUE QUEDA (parcial, ver docs/DDL/ddl.sql y
+   * scripts/alter_usuario_estado.sql): `usuario.estado` es una columna
+   * NUEVA que el usuario debe aplicar corriendo ese ALTER TABLE él mismo
+   * en phpMyAdmin — Claude no lo ejecutó. Mientras no se aplique, la línea
+   * de abajo que actualiza `estado` falla silenciosamente (capturada,
+   * no rompe la revocación real) y el listado/filtro por estado se
+   * degradan a "sin filtro" (ver administradores()).
    *
    * No es un método post_*: sigue el patrón de Bee para acciones vía
    * enlace GET + token CSRF en query string (ver adminController::borrar_usuario()).
@@ -234,12 +255,22 @@ class superusuarioController extends Controller implements ControllerInterface
         throw new Exception('No existe ese administrador o no pertenece a tu secretaría.');
       }
 
+      // 1) Invalidar la contraseña — esto SÍ bloquea el login ya mismo, sin depender de `estado`
       $passwordRevocada = get_new_password(); // contraseña aleatoria descartada, nadie la conoce
       if (!userModel::update_by_id($administrador['bee_user_id'], ['password' => $passwordRevocada['hash']])) {
         throw new Exception('Hubo un problema al revocar el acceso del administrador.');
       }
 
-      registrar_auditoria('baja_administrador', 'usuario', $id, 'Acceso revocado (contraseña invalidada)');
+      // 2) Marcar estado='inactivo' — no crítico: si la columna todavía no
+      // existe (ALTER pendiente), se ignora y la revocación de arriba ya
+      // es efectiva de cualquier forma.
+      try {
+        usuarioModel::update_by_id($id, ['estado' => 'inactivo']);
+      } catch (Exception $e) {
+        // ver docblock del método — columna `estado` pendiente de scripts/alter_usuario_estado.sql
+      }
+
+      registrar_auditoria('baja_administrador', 'usuario', $id, 'Acceso revocado (contraseña invalidada, estado inactivo)');
 
       Flasher::success('Se revocó el acceso del administrador.');
       Redirect::back();
