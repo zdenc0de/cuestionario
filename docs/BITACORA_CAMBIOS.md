@@ -705,6 +705,24 @@ ambos casos):**
   documentado, listo para ejecutarse fuera de Claude). Ver sección 14.1 y
   15 (nota de transparencia).
 
+**Nota post-Pasada 10 (2026-09-25) — `scripts/seed_instrumento.sql` (nuevo):**
+detectado al ayudar a configurar el entorno de una compañera de equipo: el
+esquema (`ddl.sql`) y el contenido real del instrumento (2 guías, 9
+categorías, 18 dominios, 45 dimensiones, 4 preguntas-filtro, 5 opciones de
+respuesta, 118 reactivos, 145 umbrales — 346 filas) NUNCA se habían dejado
+como un archivo reproducible en el repo; el handoff sólo decía "el DDL y el
+seed ya se ejecutaron" (sección 3) dando por hecho que cualquiera que
+clonara el repo ya tendría esos datos, lo cual es falso — Git no versiona
+el contenido de una base de datos MySQL local. Se generó con
+`mysqldump --no-create-info --complete-insert` desde la base local ya
+sembrada (sólo datos, cero `CREATE`/`DROP TABLE`) para que cualquier
+integrante del equipo pueda levantar un entorno funcional desde cero:
+`db_beeframework.sql` (núcleo de Bee, ya existía en el repo) →
+`docs/DDL/ddl.sql` (esquema) → `scripts/seed_instrumento.sql` (nuevo, el
+contenido). No incluye datos de operación (cuentas, respuestas, centros de
+trabajo, tokens) — sólo el catálogo del instrumento, que es igual en
+cualquier entorno.
+
 ---
 
 ## 8. Documentación (`docs/ARQUITECTURA.md`, `docs/RESUMEN_ESQUELETO.md`)
