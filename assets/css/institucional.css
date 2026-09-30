@@ -1,0 +1,172 @@
+/* ============================================================
+   Identidad visual — Secretaría de Cultura y Turismo del Edomex
+   Paleta institucional: guinda, café, oro, arena
+   ============================================================ */
+
+:root {
+  /* Colores institucionales como variables CSS */
+  --edomex-guinda: #9F2241;
+  --edomex-guinda-dark: #7A1A32;
+  --edomex-guinda-light: #B73252;
+  --edomex-guinda-50: #FBF4F5;
+  --edomex-guinda-100: #F5E4E8;
+
+  --edomex-cafe: #965F36;
+  --edomex-cafe-dark: #7A4B29;
+  --edomex-cafe-light: #B2764A;
+
+  --edomex-oro: #BC955B;
+  --edomex-oro-dark: #9F7C44;
+  --edomex-oro-light: #D4B483;
+
+  --edomex-arena: #DDC8A4;
+  --edomex-arena-dark: #C8B08A;
+  --edomex-arena-light: #F8F4EC;
+  --edomex-arena-50: #FDFBF7;
+
+  /* Sobrescribir variables de Bootstrap 5 */
+  --bs-primary: #9F2241;
+  --bs-primary-rgb: 159, 34, 65;
+}
+
+/* Sobrescribir clases específicas de Bootstrap con guinda */
+.btn-primary {
+  --bs-btn-bg: var(--edomex-guinda);
+  --bs-btn-border-color: var(--edomex-guinda);
+  --bs-btn-hover-bg: var(--edomex-guinda-dark);
+  --bs-btn-hover-border-color: var(--edomex-guinda-dark);
+  --bs-btn-active-bg: var(--edomex-guinda-dark);
+  --bs-btn-active-border-color: var(--edomex-guinda-dark);
+  --bs-btn-disabled-bg: var(--edomex-guinda-light);
+  --bs-btn-disabled-border-color: var(--edomex-guinda-light);
+}
+
+.btn-outline-primary {
+  --bs-btn-color: var(--edomex-guinda);
+  --bs-btn-border-color: var(--edomex-guinda);
+  --bs-btn-hover-bg: var(--edomex-guinda);
+  --bs-btn-hover-border-color: var(--edomex-guinda);
+  --bs-btn-active-bg: var(--edomex-guinda-dark);
+  --bs-btn-active-border-color: var(--edomex-guinda-dark);
+}
+
+.text-primary { color: var(--edomex-guinda) !important; }
+.bg-primary { background-color: var(--edomex-guinda) !important; }
+.border-primary { border-color: var(--edomex-guinda) !important; }
+
+.link-primary {
+  color: var(--edomex-guinda) !important;
+}
+.link-primary:hover {
+  color: var(--edomex-guinda-dark) !important;
+}
+
+/* Clases utilitarias institucionales (usando ! para ganar sobre Bootstrap) */
+.bg-guinda      { background-color: var(--edomex-guinda) !important; color: #fff; }
+.bg-guinda-dark { background-color: var(--edomex-guinda-dark) !important; color: #fff; }
+.bg-guinda-50   { background-color: var(--edomex-guinda-50) !important; }
+.bg-cafe        { background-color: var(--edomex-cafe) !important; color: #fff; }
+.bg-oro         { background-color: var(--edomex-oro) !important; }
+.bg-arena       { background-color: var(--edomex-arena) !important; }
+.bg-arena-50    { background-color: var(--edomex-arena-50) !important; }
+
+.text-guinda    { color: var(--edomex-guinda) !important; }
+.text-cafe      { color: var(--edomex-cafe) !important; }
+.text-oro       { color: var(--edomex-oro) !important; }
+.text-arena     { color: var(--edomex-arena-dark) !important; }
+
+.border-guinda  { border-color: var(--edomex-guinda) !important; }
+.border-cafe    { border-color: var(--edomex-cafe) !important; }
+.border-oro     { border-color: var(--edomex-oro) !important; }
+
+/* Encabezados institucionales */
+.card-header-institucional {
+  background-color: var(--edomex-guinda-50);
+  border-bottom: 2px solid var(--edomex-guinda);
+  color: var(--edomex-guinda-dark);
+  font-weight: 600;
+}
+
+/* Barra superior institucional (para el dashboard) */
+.topbar-institucional {
+  background-color: var(--edomex-guinda);
+  color: #fff;
+}
+
+/* Botón guinda personalizado (para no depender del btn-primary de Bootstrap) */
+.btn-guinda {
+  background-color: var(--edomex-guinda);
+  border-color: var(--edomex-guinda);
+  color: #fff;
+}
+.btn-guinda:hover,
+.btn-guinda:focus {
+  background-color: var(--edomex-guinda-dark);
+  border-color: var(--edomex-guinda-dark);
+  color: #fff;
+}
+
+.btn-outline-guinda {
+  color: var(--edomex-guinda);
+  border-color: var(--edomex-guinda);
+}
+.btn-outline-guinda:hover {
+  background-color: var(--edomex-guinda);
+  color: #fff;
+}
+
+/* Badge guinda (por si Bootstrap no lo hereda) */
+.badge-guinda {
+  background-color: var(--edomex-guinda);
+  color: #fff;
+}
+
+/* ============================================================
+   Sidebar institucional (SB Admin 2)
+   ============================================================ */
+
+/* Sidebar con fondo guinda */
+.sidebar.bg-guinda {
+  background-color: var(--edomex-guinda) !important;
+  background-image: none !important;
+}
+
+/* Mantener el look "dark" del sidebar original */
+.sidebar-dark.bg-guinda .nav-link {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.sidebar-dark.bg-guinda .nav-link:hover {
+  color: #fff;
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-dark.bg-guinda .nav-link.active {
+  color: #fff;
+  background-color: rgba(0, 0, 0, 0.15);
+}
+
+.sidebar-dark.bg-guinda .sidebar-divider {
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.sidebar-dark.bg-guinda .sidebar-heading {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.sidebar-dark.bg-guinda .sidebar-brand {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Toggle del sidebar */
+.sidebar.bg-guinda #sidebarToggle {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.sidebar.bg-guinda #sidebarToggle::after {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.sidebar.bg-guinda #sidebarToggle:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}

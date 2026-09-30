@@ -28,6 +28,9 @@
   
   <!-- Carga de Meta Pixel -->
   <?php echo init_meta_pixel(); ?>
+
+  <!-- Tailwind CSS (debe ir al final para tener prioridad) -->
+   <link rel="stylesheet" href="<?php echo CSS; ?>tailwind.css?v=<?php echo get_asset_version(); ?>">
 </head>
 
 <body>

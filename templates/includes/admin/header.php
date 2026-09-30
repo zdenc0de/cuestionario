@@ -50,4 +50,7 @@
 
   <!-- Carga de meta tags -->
   <?php echo get_page_og_meta_tags(); ?>
+
+  <!-- Identidad institucional Edomex -->
+  <link rel="stylesheet" href="<?php echo CSS; ?>institucional.css">
 </head>
