@@ -8,7 +8,7 @@
 $rolSidebar = obtener_rol_usuario_actual();
 ?>
 <!-- Sidebar -->
-<ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
+<ul class="navbar-nav bg-guinda sidebar sidebar-dark accordion" id="accordionSidebar">
 
   <!-- Sidebar - Brand -->
   <a class="sidebar-brand d-flex align-items-center justify-content-center" href="<?php echo get_base_url() . ($rolSidebar !== null ? ruta_tablero_segun_rol() : ''); ?>">

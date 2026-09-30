@@ -1,104 +1,155 @@
 <?php require_once INCLUDES . 'admin/dashboardTop.php'; ?>
 
 <div class="row">
-  <!-- Alta de administrador (RF-09) -->
-  <div class="col-12 col-md-6 col-lg-6 col-xl-4">
-    <div class="card shadow mb-4">
-      <div class="card-header py-3">
-        <h6 class="m-0 font-weight-bold text-primary">Agregar administrador</h6>
+  <!-- Alta de administrador -->
+  <div class="col-12 col-lg-4 mb-4">
+    <div class="card">
+      <div class="card-header bg-white border-bottom">
+        <h2 class="h5 mb-0 text-dark font-weight-bold">
+          Agregar administrador
+        </h2>
       </div>
       <div class="card-body">
         <form action="<?php echo get_base_url(); ?>superusuario/post_administradores" method="post">
           <?php echo insert_inputs(); ?>
 
           <div class="mb-3">
-            <label for="username" class="form-label">Nombre de usuario <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" id="username" name="username" required>
+            <label for="username" class="form-label text-dark">
+              Nombre de usuario <span class="text-danger">*</span>
+            </label>
+            <input 
+              type="text" 
+              class="form-control" 
+              id="username" 
+              name="username" 
+              required
+              autocomplete="username"
+            >
+            <small class="form-text text-muted">
+              Sin espacios ni caracteres especiales.
+            </small>
           </div>
 
           <div class="mb-3">
-            <label for="email" class="form-label">Correo electrónico <span class="text-danger">*</span></label>
-            <input type="email" class="form-control" id="email" name="email" required>
+            <label for="email" class="form-label text-dark">
+              Correo electrónico <span class="text-danger">*</span>
+            </label>
+            <input 
+              type="email" 
+              class="form-control" 
+              id="email" 
+              name="email" 
+              required
+              autocomplete="email"
+            >
+            <small class="form-text text-muted">
+              Debe ser un correo institucional.
+            </small>
           </div>
 
           <div class="mb-3">
-            <label for="password" class="form-label">Contraseña <span class="text-danger">*</span></label>
-            <input type="password" class="form-control" id="password" name="password" required>
+            <label for="password" class="form-label text-dark">
+              Contraseña <span class="text-danger">*</span>
+            </label>
+            <input 
+              type="password" 
+              class="form-control" 
+              id="password" 
+              name="password" 
+              required
+              autocomplete="new-password"
+            >
+            <small class="form-text text-muted">
+              Mínimo 8 caracteres.
+            </small>
           </div>
 
-          <button class="btn btn-success btn-lg w-100" type="submit">Agregar administrador</button>
+          <button class="btn btn-primary btn-block" type="submit">
+            Agregar administrador
+          </button>
         </form>
       </div>
     </div>
   </div>
 
   <!-- Listado de administradores -->
-  <div class="col-12 col-md-6 col-lg-6 col-xl-8">
-    <div class="card shadow mb-4">
-      <div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <h6 class="m-0 font-weight-bold text-primary">Administradores de tu secretaría</h6>
-        <!-- Filtro por estado (columna nueva, ver scripts/alter_usuario_estado.sql;
-             si todavía no se aplicó el ALTER, el controlador ignora el filtro y muestra todos) -->
-        <div class="btn-group btn-group-sm" role="group">
-          <a href="<?php echo get_base_url(); ?>superusuario/administradores" class="btn btn-outline-secondary <?php echo empty($d->filtro_estado) ? 'active' : ''; ?>">Todos</a>
-          <a href="<?php echo get_base_url(); ?>superusuario/administradores?estado=activo" class="btn btn-outline-success <?php echo ($d->filtro_estado ?? null) === 'activo' ? 'active' : ''; ?>">Activos</a>
-          <a href="<?php echo get_base_url(); ?>superusuario/administradores?estado=inactivo" class="btn btn-outline-secondary <?php echo ($d->filtro_estado ?? null) === 'inactivo' ? 'active' : ''; ?>">Inactivos</a>
+  <div class="col-12 col-lg-8 mb-4">
+    <div class="card">
+      <div class="card-header bg-white border-bottom">
+        <div class="d-flex justify-content-between align-items-center flex-wrap">
+          <h2 class="h5 mb-0 text-dark font-weight-bold">
+            Administradores de tu secretaría
+          </h2>
+          <div class="btn-group btn-group-sm" role="group">
+            <a href="<?php echo get_base_url(); ?>superusuario/administradores" 
+               class="btn <?php echo empty($d->filtro_estado) ? 'btn-primary' : 'btn-outline-secondary'; ?>">
+              Todos
+            </a>
+            <a href="<?php echo get_base_url(); ?>superusuario/administradores?estado=activo" 
+               class="btn <?php echo ($d->filtro_estado ?? null) === 'activo' ? 'btn-primary' : 'btn-outline-secondary'; ?>">
+              Activos
+            </a>
+            <a href="<?php echo get_base_url(); ?>superusuario/administradores?estado=inactivo" 
+               class="btn <?php echo ($d->filtro_estado ?? null) === 'inactivo' ? 'btn-primary' : 'btn-outline-secondary'; ?>">
+              Inactivos
+            </a>
+          </div>
         </div>
       </div>
-      <div class="card-body">
-        <div class="table-responsive">
-          <table class="table table-bordered" width="100%">
-            <thead>
-              <tr>
-                <th>Usuario</th>
-                <th>Correo</th>
-                <th>Estado</th>
-                <th>Alta</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php if (empty($d->administradores)): ?>
+      <div class="card-body p-0">
+        <?php if (empty($d->administradores)): ?>
+          <div class="text-center text-muted py-5">
+            <p class="mb-0">Aún no hay administradores dados de alta.</p>
+          </div>
+        <?php else: ?>
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead class="bg-light">
                 <tr>
-                  <td colspan="5" class="text-center text-muted">Aún no hay administradores dados de alta.</td>
+                  <th class="border-top-0">Usuario</th>
+                  <th class="border-top-0">Correo</th>
+                  <th class="border-top-0 text-center">Estado</th>
+                  <th class="border-top-0">Alta</th>
+                  <th class="border-top-0 text-right">Acciones</th>
                 </tr>
-              <?php else: ?>
+              </thead>
+              <tbody>
                 <?php foreach ($d->administradores as $admin): ?>
-                  <?php
-                    // `estado` puede no venir todavía en el objeto si la
-                    // columna no existe (ALTER pendiente, ver arriba) —
-                    // se asume 'activo' de forma segura en ese caso.
-                    $estadoAdmin = $admin->estado ?? 'activo';
-                  ?>
-                  <tr class="<?php echo $estadoAdmin === 'inactivo' ? 'table-secondary' : ''; ?>">
-                    <td><?php echo htmlspecialchars($admin->username); ?></td>
-                    <td><?php echo htmlspecialchars($admin->email); ?></td>
-                    <td>
+                  <?php $estadoAdmin = $admin->estado ?? 'activo'; ?>
+                  <tr>
+                    <td class="align-middle">
+                      <?php echo htmlspecialchars($admin->username); ?>
+                    </td>
+                    <td class="align-middle">
+                      <?php echo htmlspecialchars($admin->email); ?>
+                    </td>
+                    <td class="align-middle text-center">
                       <?php if ($estadoAdmin === 'activo'): ?>
-                        <span class="badge bg-success">Activo</span>
+                        <span class="badge badge-success">Activo</span>
                       <?php else: ?>
-                        <span class="badge bg-secondary">Inactivo</span>
+                        <span class="badge badge-secondary">Inactivo</span>
                       <?php endif; ?>
                     </td>
-                    <td><?php echo htmlspecialchars($admin->created_at); ?></td>
-                    <td>
+                    <td class="align-middle text-muted small">
+                      <?php echo htmlspecialchars($admin->created_at); ?>
+                    </td>
+                    <td class="align-middle text-right">
                       <?php if ($estadoAdmin === 'activo'): ?>
-                        <!-- Patrón de Bee: enlace GET + token CSRF en query string (ver adminController::borrar_usuario()) -->
                         <a href="<?php echo get_base_url(); ?>superusuario/borrar_administrador/<?php echo $admin->id; ?>?_t=<?php echo CSRF_TOKEN; ?>"
                            class="btn btn-sm btn-outline-danger confirmar"
-                           title="Revoca el acceso (no borra su historial de auditoría, ver docblock de borrar_administrador())">
-                          Revocar acceso
+                           title="Revoca el acceso del administrador">
+                          Revocar
                         </a>
                       <?php else: ?>
-                        <span class="text-muted small">Acceso ya revocado</span>
+                        <span class="text-muted small">Acceso revocado</span>
                       <?php endif; ?>
                     </td>
                   </tr>
                 <?php endforeach; ?>
-              <?php endif; ?>
-            </tbody>
-          </table>
-        </div>
+              </tbody>
+            </table>
+          </div>
+        <?php endif; ?>
       </div>
     </div>
   </div>
