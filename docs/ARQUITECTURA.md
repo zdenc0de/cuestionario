@@ -908,3 +908,61 @@ recibe la vista) NO son los arreglos asociativos que regresan los modelos —
 vistas de administrador/súper usuario; `individualView.php` no lo siguió en
 su primera versión y produjo un `Fatal error` en cuanto se probó con datos
 reales — corregido, ver bitácora 17.3 para el detalle.
+
+## 18. Auditoría previa al servidor de pruebas real (2026-09-30)
+
+Antes de que el equipo probara el sistema en un servidor real por primera
+vez (hasta ahora sólo `localhost`), se auditaron los 5 controladores reales
+y sus modelos buscando específicamente código que funciona "por accidente"
+en desarrollo local y podría fallar en un servidor compartido. Ver
+`docs/BITACORA_CAMBIOS.md` sección 18 para el detalle completo de cada
+hallazgo; aquí sólo el resumen de diseño.
+
+### 18.1 Transacciones reales en escritura de lote
+
+`respuestaModel::insertar_lote()` pasó de insertar una por una (auto-commit
+individual) a una transacción real, con el mismo patrón que
+`resultadoModel::calcular_para_aplicacion()` (cerrar cualquier transacción
+"colgada" de `Db::query()`, abrir una propia, cada `INSERT` con
+`['transaction' => false]`, commit/rollback manual). Un fallo a medio lote
+ahora revierte todo el intento en vez de dejar una aplicación con
+respuestas parciales y sin forma de completarla ni reintentarla — riesgo
+real bajo carga concurrente real, mucho menos probable en pruebas locales
+aisladas.
+
+### 18.2 Consistencia de guards entre controladores
+
+`loginController::post_login()` (el único controlador nativo de Bee que el
+proyecto sigue usando de verdad, vía la redirección por rol de la sección
+17.1) no tenía `requiere_metodo_post()`, a diferencia de los otros 4
+controladores reales del sistema. Ahora lo tiene, por consistencia con el
+resto del hardening de la sección 7.
+
+### 18.3 Stubs honestos en vez de silenciosos
+
+Los métodos todavía no implementados (`borrar_centro_trabajo()`,
+`editar_centro_trabajo()`, `editar_administrador()`) ahora siguen el mismo
+patrón que ya usaba `habilitar()`: un mensaje explícito de "funcionalidad
+pendiente" en vez de una página en blanco o una vista renderizada sin sus
+datos (que se veía como un estado vacío real, no como una función sin
+terminar). Ninguno de los tres cambia de alcance — siguen sin implementar
+la acción, sólo cambia cómo lo comunican.
+
+### 18.4 Manejo de errores de PHP en producción (resuelto)
+
+`app/core/settings.php` ahora fuerza `display_errors=0` +
+`log_errors=1` + `error_log` hacia `app/logs/php_errors.log` cuando
+`IS_LOCAL` es `false` — un `Fatal error` real ya no muestra la ruta del
+servidor ni el stack trace al visitante, sólo queda registrado en archivo.
+En local no cambia nada (a propósito). Autorizado explícitamente por el
+usuario antes de tocar `settings.php` (fuera de los dos puntos de
+extensión que reserva Bee). Ver bitácora 18.3 para el detalle y la
+verificación (script CLI simulando una IP externa).
+
+### 18.5 Pendiente de datos del servidor real
+
+`app/config/bee_config.php` (`DB_HOST`/`DB_NAME`/`DB_USER`/`DB_PASS`/
+`LIVE_PATH`) sigue pendiente de la información del servidor de pruebas —
+no es un bug de código, es configuración que depende del entorno real y se
+resuelve cuando se tengan esos datos (ver checklist completo en la
+bitácora 18.3).

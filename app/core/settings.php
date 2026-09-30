@@ -132,6 +132,23 @@ define('INCLUDES'                , TEMPLATES . 'includes' . DS);
 define('MODULES'                 , TEMPLATES . 'modules' . DS);
 define('VIEWS'                   , TEMPLATES . 'views' . DS);
 
+// Manejo de errores de PHP (agregado Pasada 11, auditoría previa al
+// servidor de pruebas real): fuera de local, oculta los errores del
+// visitante y los registra en archivo en vez de imprimirlos en pantalla —
+// un Fatal error sin esto muestra la ruta completa del servidor y el stack
+// trace a cualquiera que lo dispare (ver el hallazgo real de la Pasada 10,
+// sección 17.3 de docs/BITACORA_CAMBIOS.md), lo cual es una fuga de
+// información en un sistema que maneja datos personales (RNF-01). En local
+// (IS_LOCAL) NO se toca nada — sigue dependiendo del php.ini local, igual
+// que antes de este cambio, para no alterar el comportamiento con el que
+// se ha estado desarrollando y depurando hasta ahora.
+if (!IS_LOCAL) {
+  ini_set('display_errors', '0');
+  ini_set('log_errors', '1');
+  ini_set('error_log', LOGS . 'php_errors.log');
+  error_reporting(E_ALL);
+}
+
 // Rutas de recursos y assets absolutos
 define('IMAGES_PATH'             , ROOT . 'assets' . DS . 'images' . DS);
 

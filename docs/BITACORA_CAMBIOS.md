@@ -1,22 +1,22 @@
 # Bitácora de cambios — Cuestionario NOM-035 (sesiones con Claude)
 
 > Documento de auditoría: enumera **todos** los archivos creados o modificados
-> por el agente Claude en este proyecto hasta el 2026-09-24, en qué momento
-> (de 10 pasadas de trabajo) y **por qué**, para que otro agente/desarrollador
+> por el agente Claude en este proyecto hasta el 2026-09-30, en qué momento
+> (de 11 pasadas de trabajo) y **por qué**, para que otro agente/desarrollador
 > pueda revisarlo contra el código real. No repite la explicación funcional
 > de cada módulo (eso ya está en `docs/ARQUITECTURA.md`); aquí el foco es
 > **el cambio puntual y su justificación**.
 >
 > Contexto de repositorio en el momento de escribir esto: rama `main`, HEAD
 > en `5b2335e` ("docs: documenta el bootstrap y el modulo de superusuario
-> (Pasada 7)"). Las Pasadas 8, 9 y 10 (este documento) están en el working
+> (Pasada 7)"). Las Pasadas 8-11 (este documento) están en el working
 > tree, sin commitear todavía. Claude no ejecutó ningún comando de Git en
 > ningún momento; los commits fueron corridos por el usuario con comandos
 > que Claude únicamente redactó como texto.
 
 ---
 
-## 0. Las 10 pasadas de trabajo
+## 0. Las 11 pasadas de trabajo
 
 | Pasada | Disparador | Qué produjo |
 |---|---|---|
@@ -30,8 +30,9 @@
 | **8. Administrador** | `docs/HANDOFF_DESARROLLO.md` §3-4 — cierra la limitación de la Pasada 7 (`usuario.estado`) + tercera tarea: módulo de administrador | `scripts/alter_usuario_estado.sql` (para que el usuario lo corra, Claude no lo ejecutó) + código ya preparado para antes/después de aplicarlo; `administradorController` implementado (alta de centros con el guard ≤15, listado, generación/listado/revocación de tokens con `bin2hex(random_bytes())`); alcance por `administrador_id` (más estricto que por secretaría) verificado en vivo con dos administradores de la MISMA secretaría. Sección 15 de `ARQUITECTURA.md`. |
 | **9. Encuestado** | `docs/HANDOFF_DESARROLLO.md` §3-4 — cuarta tarea: flujo completo del encuestado (`cuestionarioController`), cierra la cadena hasta el motor de calificación de la Pasada 6 | `preguntaFiltroModel` (nuevo) + 2 métodos JOIN en `reactivoModel`; `cuestionarioController` implementado de verdad (acceso por token, sesión nativa de PHP para ligar el flujo sin cuenta de Bee, lógica condicional de las preguntas-filtro, validación de completitud, cálculo automático del resultado al enviar); `cuestionarioView.php` reescrita para usar datos reales del instrumento. Verificado end-to-end con `curl` contra datos REALES capturados por el flujo (no inyectados), ambas guías, calificación confirmada a mano. Sección 16 de `ARQUITECTURA.md`. |
 | **10. Navegación de punta a punta** | `docs/HANDOFF_DESARROLLO.md` — "dejar el sistema navegable de punta a punta para validación visual humana": conectar los tres flujos, resultado individual real, puntos de entrada desde la raíz | Redirección post-login por rol (bug real encontrado y corregido: el global `$Bee_User` que usa `get_user()` no se actualiza en la misma petición del login — ver 17.1); sidebar del panel admin dejó de ser el catálogo genérico de Bee y ahora es por rol; `resultadosController::individual()` implementado de verdad (identidad, calificación, desglose); enlace "aplicaciones respondidas → resultado" desde `administradorController::tokens()`; enlaces cruzados encuestado↔login; enlaces muertos removidos de `loginView.php`. Recorrido END-TO-END real con `curl` (súper usuario crea administrador → administrador crea centro y token → encuestado responde → administrador ve el resultado), datos dejados sembrados a propósito (no se limpiaron, ver sección 17.4). Sección 17 de `ARQUITECTURA.md`. |
+| **11. Auditoría de bugs previa al servidor de pruebas real** | "análisis completo, detecta bugs que bloquean el funcionamiento" — el equipo va a probar en un servidor de pruebas real (no localhost) por primera vez | 3 bugs reales encontrados y corregidos: `loginController::post_login()` sin `requiere_metodo_post()` (único de los 5 controladores reales sin ese guard); `respuestaModel::insertar_lote()` sin transacción (un fallo a medio lote podía dejar una aplicación permanentemente imposible de completar); 3 métodos stub (`borrar_centro_trabajo()`, `editar_centro_trabajo()`, `editar_administrador()`) que mostraban página en blanco o una vista engañosa en vez de avisar honestamente que faltan por implementar. Los 3 verificados en vivo con `curl` después de corregidos. Más una checklist de configuración para el servidor real (no son bugs de código) en la sección 18. Sección 18 de `ARQUITECTURA.md`. |
 
-En las 10 pasadas se respetaron las mismas restricciones: **no** se ejecutó
+En las 11 pasadas se respetaron las mismas restricciones: **no** se ejecutó
 Git, **no** se modificó ningún archivo de `app/classes/*` (núcleo de Bee), y
 todo lo agregado sigue las convenciones nativas de Bee Framework 1.5.8
 (controladores `xyzController extends Controller implements ControllerInterface`,
@@ -249,6 +250,29 @@ a como se creó originalmente.
   `insertOne()`) fue suficiente para persistir las respuestas capturadas por
   el flujo real; el TODO de envolverlo en una transacción sigue pendiente
   (no se tocó, está fuera del alcance pedido en esta pasada).
+- **Pasada 11 (auditoría) — bug real, el más importante de esta pasada:**
+  `insertar_lote()` se reescribió para usar una transacción real (mismo
+  patrón que `resultadoModel::calcular_para_aplicacion()`: cerrar cualquier
+  transacción "colgada" de `Db::query()` antes de abrir la propia, cada
+  `INSERT` con `['transaction' => false]`, commit/rollback manual). **Por
+  qué era un bug real y no sólo una mejora:** con el bucle de `insertOne()`
+  (auto-commit individual, sin transacción), un fallo a la mitad del lote
+  (ej. una caída transitoria de conexión — más probable en un servidor
+  compartido real que en `localhost`) dejaba las respuestas ya insertadas
+  persistidas, pero `cuestionarioController::post_responder()` nunca llega
+  a marcar la aplicación `'completada'` (eso pasa después, sólo si
+  `insertar_lote()` regresa `true`) — y un reintento del mismo envío violaba
+  la restricción `UNIQUE (aplicacion_id, reactivo_id)` sobre las respuestas
+  que sí habían quedado, fallando de inmediato. Esa aplicación quedaba
+  **permanentemente atorada**: ni completa ni se podía volver a intentar,
+  sin una forma de arreglarlo salvo borrar filas a mano en la base de
+  datos. Con la transacción real, un fallo a medio lote revierte TODO el
+  intento — el encuestado ve el mismo mensaje de error de siempre, pero
+  puede reintentar el envío completo sin quedar atrapado. Verificado con
+  `curl` (cuestionario completo de 46 reactivos, GRII) tras el cambio: las
+  46 respuestas, la aplicación `'completada'` y el resultado calculado
+  quedaron exactamente igual que antes del fix — no cambió el
+  comportamiento del camino feliz, sólo el del fallo a medias.
 
 ### 1.11 `auditoriaModel.php`
 - **Pasada 1:** creado con columnas `ip VARCHAR(45)` y `creado DATETIME`.
@@ -398,6 +422,19 @@ clientes" con `(int) $filtro['orden'] === 1`, igual que hace el propio DDL.
   centro se llega a las aplicaciones respondidas y de ahí a su resultado
   individual (ver `tokensView.php` en la sección 3 y `resultadosController::individual()`
   en 2.4).
+- **Pasada 11 (auditoría):** `borrar_centro_trabajo()` tenía el cuerpo
+  completamente vacío desde la Pasada 1 (ni `TODO` ejecutable ni
+  `render()`/`Redirect` — sólo comentarios) — visitar esa URL directamente
+  mostraba una página en blanco, sin ningún mensaje. `editar_centro_trabajo()`
+  renderizaba `centrosTrabajoView.php` sin pasarle `$d->centros`, mostrando
+  "aún no has dado de alta ningún centro de trabajo" aunque sí existieran —
+  una vista engañosa, no sólo incompleta. Ninguno de los dos está enlazado
+  todavía desde ninguna vista (no se pidió en ninguna tarea), pero ambos son
+  URLs alcanzables por cualquier administrador autenticado. Se corrigieron
+  al mismo patrón que ya usaba `habilitar()`: `Flasher::error('Funcionalidad
+  pendiente de implementación...')` + `Redirect::back()` — honesto sobre
+  que falta implementar, en vez de blanco o engañoso. Verificado con `curl`
+  tras el fix. Ver sección 18.1.
 
 ### 2.3 `superusuarioController.php` (rol `superusuario`)
 - **Pasada 1:** creado con `index()`, `administradores()`/`post_administradores()`,
@@ -424,6 +461,12 @@ clientes" con `(int) $filtro['orden'] === 1`, igual que hace el propio DDL.
   en el commit `e73100a`, probablemente por un `git add` demasiado amplio) y
   ya la borró tras confirmar que la versión real en `app/controllers/`
   estaba intacta. Claude no tocó esa ruta en ningún momento.
+- **Pasada 11 (auditoría):** `editar_administrador()` tenía el mismo defecto
+  que `editar_centro_trabajo()` (ver 2.2) — renderizaba `administradoresView.php`
+  sin pasarle `$d->administradores`, mostrando la tabla vacía aunque sí
+  hubiera administradores. Mismo fix: `Flasher::error('Funcionalidad
+  pendiente...')` + `Redirect::back()`. Verificado con `curl`. Ver
+  sección 18.1.
 
 ### 2.4 `resultadosController.php` (comparte roles `administrador`/`superusuario`)
 - **Pasada 1:** creado con `individual()`, `agregado()`, `tablero()`,
@@ -474,6 +517,16 @@ clientes" con `(int) $filtro['orden'] === 1`, igual que hace el propio DDL.
   parametrizada, ver sección 4) y resolviendo el rol directamente contra
   `usuarioModel::by_bee_user_id($user['id'])` en `post_login()`, sin pasar
   por el global. Ver sección 17.1 para el detalle completo.
+- **Pasada 11 (auditoría):** se agregó `requiere_metodo_post()` al inicio de
+  `post_login()` — **por qué:** era el ÚNICO de los 5 controladores reales
+  del sistema sin ese guard (los otros 4 lo tienen desde la Pasada 2); una
+  petición GET a esa URL no habría iniciado sesión (`$_POST` vendría vacío,
+  `Csrf::validate()` habría fallado igual), pero dejaba una inconsistencia
+  real frente al resto del código. De paso se agregó `?? ''` a
+  `$_POST['csrf']` (no lo tenía, a diferencia del resto de los
+  `Csrf::validate()` del sistema) — sin eso, un POST sin el campo `csrf`
+  lanzaba un warning de "Undefined array key" en PHP 8.2 en vez de fallar
+  limpio. Ver sección 18.1.
 
 ---
 
@@ -1154,7 +1207,7 @@ conservadora.
 
 ---
 
-## 15. Restricciones respetadas en las 10 pasadas
+## 15. Restricciones respetadas en las 11 pasadas
 
 - **Cero comandos de Git ejecutados por Claude.** Cuando el usuario pidió
   los 6 commits segmentados, Claude entregó los comandos como texto para que
@@ -1189,7 +1242,7 @@ conservadora.
   modelos, 1 controlador, 2 vistas, 2 scripts en la Pasada 7; 2 modelos,
   2 controladores, 3 vistas, 1 SQL en la Pasada 8; 2 modelos, 1 controlador,
   3 vistas en la Pasada 9; 1 función auxiliar, 3 controladores, 5 vistas/includes
-  en la Pasada 10).
+  en la Pasada 10; 1 modelo, 3 controladores en la Pasada 11).
 - **La Pasada 7 sí insertó y borró datos reales en la BD del usuario**
   (datos de prueba desechables, para la verificación por `curl` de 13.3) —
   pero **no** dejó nada permanente: se confirmó con `SELECT COUNT(*)` que
@@ -1221,6 +1274,19 @@ conservadora.
   credenciales y el token quedaron documentados en la sección 17.4 para el
   usuario. El `ALTER TABLE` de `usuario.estado` (Pasada 8) sigue sin
   ejecutarse — eso no cambió.
+- **La Pasada 11 sólo insertó UNA aplicación de prueba adicional**
+  (`SP-V11`, en el mismo centro de trabajo "Museo Regional de Toluca" de la
+  Pasada 10) para verificar en vivo la transacción reescrita de
+  `respuestaModel::insertar_lote()` — se dejó sembrada, mismo criterio que
+  la Pasada 10 (el usuario sigue en proceso de validar el sistema, no se
+  quiere limpiar nada todavía). No se tocó ninguna base de datos fuera de
+  la local de esta máquina; el archivo `scripts/instalacion_completa.sql`
+  que se generó como parte del trabajo entre la Pasada 10 y la 11 (para
+  llevar una base de datos completa a otro entorno) se entregó FUERA del
+  repositorio (carpeta de Descargas del usuario), a propósito — contiene
+  hashes de contraseñas de cuentas reales de prueba, y un clasificador
+  automático de seguridad bloqueó moverlo a `scripts/` por "posible fuga de
+  credenciales"; el usuario confirmó que prefiere mantenerlo fuera de Git.
 - **Se reinició MariaDB y Apache localmente** durante la Pasada 7 (13.3,
   incidente) — acción de infraestructura local de desarrollo, no
   destructiva (se confirmó integridad de datos antes/después), no
@@ -1473,3 +1539,126 @@ puede volver a usarse para responder (RF-11, una aplicación por token +
 número de servidor público) — el usuario puede generar un token nuevo desde
 el panel del administrador para probar el flujo del encuestado de nuevo si
 lo quiere.
+
+---
+
+## 18. Pasada 11 — auditoría de bugs previa al servidor de pruebas real (2026-09-30)
+
+Prompt recibido: "análisis completo, detecta bugs que bloquean el completo
+funcionamiento del proyecto" — el equipo ya tiene un servidor de pruebas
+real (no `localhost`) y va a subir el proyecto ahí por primera vez. Se
+auditó el código de los 5 controladores reales, sus modelos, y la
+configuración de entorno, buscando específicamente cosas que funcionan
+"por accidente" en `localhost` y podrían no funcionar en un servidor
+compartido real.
+
+### 18.1 Bugs reales encontrados y corregidos (código)
+
+1. **`loginController::post_login()` sin `requiere_metodo_post()`** — el
+   único de los 5 controladores reales sin ese guard (los otros 4 lo tienen
+   desde la Pasada 2). De paso se agregó `?? ''` a `$_POST['csrf']`, que
+   tampoco tenía (a diferencia de todos los demás `Csrf::validate()` del
+   sistema) — sin eso, un POST sin el campo `csrf` producía un warning de
+   PHP 8.2 en vez de fallar limpio. Ver sección 2.5.
+2. **`respuestaModel::insertar_lote()` sin transacción** — el hallazgo más
+   importante de esta pasada. Insertaba una por una con auto-commit
+   individual; un fallo a medio lote (más probable en un servidor
+   compartido real que en un XAMPP local aislado) dejaba una aplicación
+   **permanentemente atorada**: algunas respuestas ya guardadas, la
+   aplicación nunca marcada `'completada'`, y cualquier reintento fallando
+   de inmediato por la restricción de unicidad sobre las respuestas que sí
+   habían quedado — sin forma de recuperarla salvo editando la base de
+   datos a mano. Corregido con una transacción real (mismo patrón que
+   `resultadoModel::calcular_para_aplicacion()`). Ver sección 1.10.
+3. **3 métodos stub con comportamiento engañoso en vez de honesto:**
+   `administradorController::borrar_centro_trabajo()` (cuerpo vacío →
+   página en blanco), `administradorController::editar_centro_trabajo()` y
+   `superusuarioController::editar_administrador()` (renderizaban la vista
+   de listado sin los datos → mostraban "sin registros" aunque sí
+   hubiera). Los tres corregidos al mismo patrón que ya usaba
+   `habilitar()`: mensaje explícito de "funcionalidad pendiente" +
+   redirect. Ninguno estaba enlazado desde ninguna vista todavía, pero las
+   3 URLs son alcanzables por cualquier usuario autenticado del rol
+   correspondiente. Ver secciones 2.2/2.3.
+
+Los 3 hallazgos se verificaron en vivo con `curl` después de corregidos —
+no sólo `php -l` — incluyendo un recorrido completo del cuestionario (46
+respuestas, GRII) para confirmar que la reescritura de `insertar_lote()`
+no cambió el comportamiento del camino feliz.
+
+### 18.2 Lo que se revisó y NO es un bug (transparencia)
+
+- **Rutas con guión** (`administrador/centros-trabajo` en
+  `indexView.php`, vs `administrador/centros_trabajo` en el resto):
+  ambas funcionan — Bee convierte guiones a guiones bajos en el segmento
+  del método (`Bee.php::str_replace('-', '_', ...)`) antes de resolver
+  el método del controlador. No hace falta unificarlas.
+- **`getUser()`/`$_SERVER['REMOTE_ADDR']`, sesiones, cookies** (`BEE_COOKIE_DOMAIN`,
+  `BEE_COOKIE_PATH`): ya están en su configuración más genérica/segura
+  posible (dominio vacío = el host actual, sin hardcodear nada) — no hace
+  falta tocarlos para un servidor nuevo.
+- **Case-sensitivity de rutas de archivo** (Windows, donde se desarrolló,
+  no distingue mayúsculas/minúsculas; Linux, donde probablemente corra el
+  servidor real, sí): se revisaron TODOS los `require`/`setView()` de los 5
+  controladores reales contra el nombre exacto de cada archivo en disco —
+  coinciden en mayúsculas/minúsculas en los 100% de los casos revisados.
+  No se encontró ningún caso que funcione "por accidente" en Windows y
+  fuera a fallar en Linux.
+- **`persistent_session() === false` en `loginController::post_login()`**
+  (la rama con un usuario/contraseña de prueba "bee"/"123456" hardcodeados
+  en el código, herencia del scaffold de Bee): es código muerto en este
+  proyecto — `persistent_session()` siempre regresa `true` mientras
+  `BEE_COOKIES` sea `true` (`settings.php`), que es el valor actual y no se
+  tocó. No representa un riesgo mientras `BEE_COOKIES` no cambie.
+
+### 18.3 Checklist de configuración para el servidor de pruebas (NO son bugs de código — pendiente de los datos del servidor)
+
+Esto no se corrigió porque depende de información que el usuario dijo que
+compartiría después de esta auditoría:
+
+- **`app/config/bee_config.php`**: `DB_HOST`/`DB_NAME`/`DB_USER`/`DB_PASS`
+  están vacíos — el sistema sólo funciona hoy en `localhost` (usa
+  `LDB_*` en su lugar, ver `Db.php`). Hay que llenarlos con las
+  credenciales reales del servidor de pruebas.
+- **`LIVE_PATH`** (misma clase, hoy `'/'`): sólo es correcto si el proyecto
+  se va a servir desde la raíz del dominio/subdominio del servidor de
+  pruebas. Si se sirve desde una subcarpeta (ej.
+  `servidor.com/cuestionario/`), hay que cambiarlo a esa ruta — si no,
+  **todos** los enlaces internos (`get_base_url()`) apuntarían mal.
+- **`.htaccess`** (raíz del proyecto) depende de `mod_rewrite` habilitado
+  y `AllowOverride All` en la configuración de Apache del servidor — sin
+  eso, ninguna ruta del sistema funcionaría (todo caería a 404). Hay que
+  confirmarlo con quien administre el servidor.
+- ~~**Manejo de errores de PHP en producción**~~ — **resuelto el mismo día,
+  con autorización explícita del usuario** (se le preguntó primero, porque
+  tocaba `app/core/settings.php`, fuera de los dos puntos de extensión que
+  reserva Bee para el proyecto). Se agregó, justo después del bloque de
+  rutas (`TEMPLATES`/`INCLUDES`/`MODULES`/`VIEWS`):
+
+  ```php
+  if (!IS_LOCAL) {
+    ini_set('display_errors', '0');
+    ini_set('log_errors', '1');
+    ini_set('error_log', LOGS . 'php_errors.log');
+    error_reporting(E_ALL);
+  }
+  ```
+
+  **Por qué:** la aplicación no definía `display_errors`/`error_reporting`
+  en ningún lado — dependía enteramente del `php.ini` del servidor. En este
+  entorno local `display_errors` está activado (así se detectó el bug de
+  `stdClass` de la Pasada 10 — sección 17.3), pero en un servidor real, si
+  también estuviera activado, CUALQUIER error de PHP futuro mostraría la
+  ruta completa del archivo y el stack trace directamente en el navegador
+  de cualquier visitante — fuga de información (rutas del servidor,
+  estructura del código) en un sistema que maneja datos personales
+  (RNF-01). **A propósito NO se toca nada si `IS_LOCAL` es `true`** — el
+  comportamiento en desarrollo local sigue dependiendo del `php.ini` local,
+  exactamente igual que antes de este cambio (verificado: `curl` local
+  antes/después del cambio, mismo comportamiento). Se creó
+  `app/logs/php_errors.log` (archivo vacío, mismo patrón que
+  `app/logs/bee_log.log`/`dev_log.log`, ya versionados). Verificado con un
+  script CLI que simula una IP externa (`REMOTE_ADDR` fuera de
+  `127.0.0.1`/`::1`, no contra el servidor real todavía): `IS_LOCAL` da
+  `false`, `display_errors` queda en `0`, `error_log` apunta al archivo
+  correcto.

@@ -189,12 +189,21 @@ class superusuarioController extends Controller implements ControllerInterface
     }
   }
 
+  /**
+   * TODO (fase de Desarrollo): cargar usuarioModel::by_id($id) y validar
+   * pertenencia a la secretaría en sesión. No pedido en ninguna tarea hasta
+   * ahora (sólo se pidió alta/listado/revocación de administradores).
+   *
+   * Corregido en la auditoría de la Pasada 11: antes renderizaba
+   * `administradoresView.php` sin pasarle `$d->administradores`, lo que
+   * mostraba la tabla vacía ("sin registros") aunque sí existieran
+   * administradores — una página engañosa en vez de honesta sobre que
+   * falta implementar.
+   */
   function editar_administrador($id = null)
   {
-    // TODO: cargar usuarioModel::by_id($id) y validar pertenencia a la secretaría en sesión
-    $this->setTitle('Editar administrador');
-    $this->setView('administradores');
-    $this->render();
+    Flasher::error('Funcionalidad pendiente de implementación (fase de Desarrollo).');
+    Redirect::back();
   }
 
   /**

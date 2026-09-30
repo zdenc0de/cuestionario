@@ -24,8 +24,18 @@ class loginController extends Controller implements ControllerInterface
 
   function post_login()
   {
+    // Bee no distingue verbos HTTP: rechaza cualquier acceso que no sea POST
+    // (mismo guard que ya tienen cuestionarioController/administradorController/
+    // superusuarioController desde la Pasada 2 — a este controlador nativo de
+    // Bee nunca se le había agregado, detectado en la auditoría de la Pasada 11).
+    requiere_metodo_post();
+
     try {
-      if (!Csrf::validate($_POST['csrf']) || !check_posted_data(['usuario','csrf','password'], $_POST)) {
+      // ?? '' (mismo patrón que el resto de los controladores): un POST sin
+      // el campo 'csrf' (ej. una petición malformada/automatizada) lanzaba
+      // un warning de "Undefined array key" en PHP 8.2 en vez de fallar
+      // limpio por CSRF inválido — detectado en la auditoría de la Pasada 11.
+      if (!Csrf::validate($_POST['csrf'] ?? '') || !check_posted_data(['usuario','csrf','password'], $_POST)) {
         throw new Exception(get_bee_message(0));
       }
   

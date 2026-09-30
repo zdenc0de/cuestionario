@@ -41,20 +41,63 @@ class respuestaModel extends Model {
   }
 
   /**
-   * Inserta en lote todas las respuestas de una aplicación
-   * TODO: envolver en transacción (ver Db::query con opción 'transaction')
+   * Inserta en lote todas las respuestas de una aplicación, en una sola
+   * transacción real (mismo patrón que
+   * resultadoModel::calcular_para_aplicacion() — ver su docblock para el
+   * detalle del ajuste por la transacción "colgada" de `Db::query()` con
+   * opciones por default).
+   *
+   * Corregido en la auditoría de la Pasada 11: la versión anterior
+   * insertaba una por una con `insertOne()` (auto-commit individual, sin
+   * transacción). Si fallaba a medio lote (ej. una caída transitoria de
+   * conexión — más probable en un servidor compartido real que en
+   * localhost), las respuestas ya insertadas quedaban persistidas pero la
+   * aplicación nunca se marcaba 'completada' (eso ocurre después, en
+   * cuestionarioController::post_responder()) — y un reintento del mismo
+   * envío fallaba de inmediato por la restricción `UNIQUE (aplicacion_id,
+   * reactivo_id)` sobre las respuestas que sí habían quedado, dejando esa
+   * aplicación permanentemente imposible de completar sin intervención
+   * manual en la base de datos. Con la transacción real, un fallo a medio
+   * lote revierte TODAS las respuestas de ese intento — el encuestado ve
+   * el mismo error de siempre ("Hubo un problema...") pero puede
+   * reintentar el envío completo sin quedar atorado.
    *
    * @param array $respuestas
    * @return bool
    */
   static function insertar_lote(array $respuestas)
   {
-    // TODO: iterar $respuestas e insertar cada una con insertOne(), idealmente en una sola transacción
-    foreach ($respuestas as $respuesta) {
-      if (!self::insertOne($respuesta)) {
-        return false;
-      }
+    if (empty($respuestas)) {
+      return true;
     }
+
+    $link = Db::connect();
+
+    if ($link->inTransaction()) {
+      $link->commit();
+    }
+
+    $sql = sprintf(
+      'INSERT INTO %s (aplicacion_id, reactivo_id, opcion_respuesta_id) VALUES (:aplicacion_id, :reactivo_id, :opcion_respuesta_id)',
+      self::$t1
+    );
+
+    try {
+      $link->beginTransaction();
+
+      foreach ($respuestas as $respuesta) {
+        parent::query($sql, $respuesta, ['transaction' => false]);
+      }
+
+      $link->commit();
+
+    } catch (Exception $e) {
+      if ($link->inTransaction()) {
+        $link->rollBack();
+      }
+      return false;
+    }
+
     return true;
   }
 

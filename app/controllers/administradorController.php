@@ -166,25 +166,40 @@ class administradorController extends Controller implements ControllerInterface
     }
   }
 
+  /**
+   * TODO (fase de Desarrollo): cargar centroTrabajoModel::by_id($id) y
+   * validar pertenencia al administrador en sesión (administrador_id ===
+   * obtener_usuario_actual()['id']), de lo contrario Flasher::deny(2) +
+   * Redirect. No pedido en ninguna tarea hasta ahora (sólo se pidió
+   * alta+listado de centros) — se deja como TODO explícito.
+   *
+   * Corregido en la auditoría de la Pasada 11: antes renderizaba
+   * `centrosTrabajoView.php` sin pasarle `$d->centros`, lo que mostraba
+   * "aún no has dado de alta ningún centro de trabajo" aunque sí existieran
+   * — una página engañosa en vez de honesta sobre que falta implementar.
+   */
   function editar_centro_trabajo($id = null)
   {
-    // TODO: cargar centroTrabajoModel::by_id($id) y validar pertenencia al administrador en sesión
-    // (administrador_id === obtener_usuario_actual()['id']), de lo contrario Flasher::deny(2) + Redirect
-
-    $this->setTitle('Editar centro de trabajo');
-    $this->setView('centrosTrabajo');
-    $this->render();
+    Flasher::error('Funcionalidad pendiente de implementación (fase de Desarrollo).');
+    Redirect::back();
   }
 
+  /**
+   * TODO (fase de Desarrollo): `if (!Csrf::validate($_GET['_t'] ?? '')) { Flasher::deny(); Redirect::back(); }`,
+   * validar pertenencia (ver editar_centro_trabajo) y borrar con
+   * centroTrabajoModel::delete_by_id($id) + registrar_auditoria(). No
+   * pedido en esta tarea (docs/HANDOFF_DESARROLLO.md §"TAREA PRINCIPAL"
+   * sólo pide alta+listado de centros).
+   *
+   * Corregido en la auditoría de la Pasada 11: el cuerpo estaba
+   * completamente vacío (sin `render()` ni `Redirect`) — visitar esta URL
+   * directamente mostraba una página en blanco sin ningún mensaje, en vez
+   * de decir claramente que la función no existe todavía.
+   */
   function borrar_centro_trabajo($id = null)
   {
-    // No es un método post_*: sigue el patrón de Bee para acciones de borrado
-    // vía enlace GET + token CSRF en query string (ver adminController::borrar_usuario())
-    // TODO: if (!Csrf::validate($_GET['_t'] ?? '')) { Flasher::deny(); Redirect::back(); }
-    // TODO: validar pertenencia (ver editar_centro_trabajo) y borrar con centroTrabajoModel::delete_by_id($id)
-    // TODO: registrar_auditoria('borrar_centro_trabajo', 'centro_trabajo', $id)
-    // No pedido en esta tarea (docs/HANDOFF_DESARROLLO.md §"TAREA PRINCIPAL"
-    // sólo pide alta+listado de centros), se deja igual que estaba.
+    Flasher::error('Funcionalidad pendiente de implementación (fase de Desarrollo).');
+    Redirect::back();
   }
 
   ////////////////////////////////////////////////////
