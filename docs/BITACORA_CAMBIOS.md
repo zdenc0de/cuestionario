@@ -1662,3 +1662,65 @@ compartiría después de esta auditoría:
   `127.0.0.1`/`::1`, no contra el servidor real todavía): `IS_LOCAL` da
   `false`, `display_errors` queda en `0`, `error_log` apunta al archivo
   correcto.
+
+---
+
+## 19. Incidente de infraestructura — corrupción de MySQL local (2026-09-30)
+
+No relacionado con ningún cambio de código de este proyecto — mismo criterio
+de transparencia que el incidente de la Pasada 7 (sección 13.3).
+
+**Qué pasó:** al intentar levantar MySQL local para continuar el trabajo,
+`mysql_error.log` mostró decenas de advertencias
+`InnoDB: Page [...] log sequence number X is in the future!` en casi todas
+las tablas (no sólo las del proyecto — también las nativas de MySQL), señal
+de un apagado sucio previo (los archivos de datos quedaron "adelantados"
+respecto al registro de transacciones). Reintentos sucesivos de arranque
+desde el panel de XAMPP agravaron el problema hasta dos fallos duros:
+
+- `InnoDB: Assertion failure ... Failing assertion: slot` (bug conocido de
+  InnoDB en Windows, `os0file.cc:6132`).
+- `mysqld got exception 0xc0000005` (violación de acceso) con el *stack
+  trace* cayendo dentro de `acl_init()`/`acl_reload()` — la carga de las
+  tablas de privilegios de MySQL.
+
+**Por qué no se intentó reparar en el lugar:** con esa severidad (colapsos
+duros, no sólo advertencias), forzar un modo de recuperación de InnoDB
+sobre el mismo `ibdata1` dañado era más riesgo que beneficio, sobre todo
+teniendo ya un respaldo completo y verificado (`instalacion_completa.sql`,
+ver sección 17.4/checklist de esta bitácora) — reconstruir desde cero era
+más seguro que reparar a ciegas.
+
+**Recuperación (instrucciones dadas al usuario; las acciones directas sobre
+`C:\xampp\mysql\data\` las ejecutó el usuario — un clasificador de
+seguridad automático bloqueó a Claude intentar mover/renombrar esa carpeta,
+calificándolo de "destrucción local irreversible"):**
+
+1. Se renombró `C:\xampp\mysql\data` a `data_corrupta_backup_20260930` — no
+   se borró nada, se apartó por si se quisiera un rescate forense después.
+2. Se copió `C:\xampp\mysql\backup\` (la plantilla original de XAMPP,
+   intacta desde la instalación) a `C:\xampp\mysql\data\` como base limpia.
+3. Primer intento de copia incompleto: la subcarpeta `mysql\` (las tablas
+   de privilegios/usuarios internas del propio servidor) quedó con 0 de 87
+   archivos — eso es lo que producía el error `Can't open and lock
+   privilege tables: Table 'mysql.servers' doesn't exist` y dejaba
+   cualquier conexión colgada sin poder autenticar. Verificado con `diff`
+   contra la plantilla, corregido por el usuario, reverificado en 0
+   diferencias.
+4. Con la base de datos limpia y MySQL arrancando sin ninguna advertencia,
+   se creó `db_beeframework` (`utf8mb4_unicode_ci`) y se importó
+   `instalacion_completa.sql` completo en una sola operación — exit code 0,
+   sin errores.
+5. Verificado: 27 tablas, el instrumento completo (346 filas: 2 guías, 9
+   categorías, 18 dominios, 45 dimensiones, 4 preguntas-filtro, 5 opciones,
+   118 reactivos, 145 umbrales) y todos los datos operativos de las Pasadas
+   10-11 (3 cuentas de Bee, 2 enlaces de rol, 1 secretaría, 1 centro de
+   trabajo, 2 tokens, 2 aplicaciones, 46 respuestas, 1 resultado) —
+   idénticos a antes del incidente. Login real de `superadmin` probado con
+   `curl` contra el servidor: funciona, redirige a `/superusuario`.
+
+**Resultado: cero pérdida de datos.** El haber armado `instalacion_completa.sql`
+unos días antes (a petición del usuario, para llevarlo al servidor de
+pruebas) resultó ser, sin buscarlo, la red de seguridad que hizo posible
+una recuperación completa y verificada en vez de una reconstrucción manual
+desde ceros.
