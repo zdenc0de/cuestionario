@@ -214,6 +214,21 @@
 }
 
 /* ============================================================
+   Círculo de ícono — usado en los tableros de administrador/súper
+   usuario (resumen en números, guía de pasos, tarjetas de acceso)
+   ============================================================ */
+.icon-circle {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+}
+
+/* ============================================================
    Tipografía institucional — Montserrat
    ============================================================ */
 

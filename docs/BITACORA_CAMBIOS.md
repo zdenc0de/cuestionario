@@ -1815,3 +1815,125 @@ Antes de recomendar el merge se verificó, sin ejecutar el merge real
 **Recomendación entregada al usuario: proceder con el merge** — comandos
 de Git redactados como texto para que el usuario los corra él mismo
 (mismo patrón de todo el proyecto: Claude nunca ejecuta Git).
+
+### 20.4 Merge ejecutado por el usuario
+
+El usuario corrió el merge él mismo (`git merge keren-frontend-bootstrap`,
+commit resultante `2edd791`). Verificado después del merge:
+- `git log`/`git status`: merge limpio en `main`, sincronizado con
+  `origin/main`.
+- Los 3 archivos (`bitacoraView.php`, `tokensView.php`,
+  `centrosTrabajoView.php`) contienen el contenido esperado de la rama de
+  Keren (confirmado buscando la clase `card-header-institucional`).
+- `php -l` en los 3: sin errores de sintaxis.
+
+### 20.5 Segundo incidente de infraestructura — misma corrupción de MySQL (2026-10-08)
+
+**Recurrencia exacta del incidente de la sección 19** (mismo patrón de
+`log sequence number is in the future` en decenas de tablas, mismo
+`[Error] MySQL shutdown unexpectedly` en el panel de XAMPP), esta vez sin
+relación con el merge recién hecho — ocurrió simplemente al intentar
+levantar MySQL para verificar el resultado del merge. Dado que ya ocurrió
+dos veces con el mismo patrón exacto, lo más probable es que el entorno
+(la máquina/VM donde corre esta sesión) se suspenda entre sesiones de
+trabajo sin que MySQL alcance a cerrar limpiamente antes de eso.
+
+**Se aplicó la misma recuperación ya documentada en la sección 19**, esta
+vez sin ningún paso en falso (la subcarpeta `mysql\` se verificó completa
+—87/87 archivos, sin diferencias contra la plantilla— antes de arrancar,
+evitando el error de la vez pasada):
+
+1. Usuario renombra `C:\xampp\mysql\data` a `data_corrupta_backup_20261008`
+   (Claude no puede ejecutar esta acción — un clasificador de seguridad la
+   bloquea como "destrucción local irreversible", igual que la vez
+   pasada).
+2. Usuario copia `C:\xampp\mysql\backup\` (la plantilla original de XAMPP,
+   sigue intacta desde 2019, confirmado antes de usarla) a
+   `C:\xampp\mysql\data\`.
+3. Verificado por Claude antes de arrancar: 87/87 archivos en `mysql\`,
+   conteos idénticos en `performance_schema`/`phpmyadmin`/`test`.
+4. MySQL arrancó sin ninguna advertencia (log limpio, cero líneas de
+   error).
+5. Se creó `db_beeframework` y se reimportó `instalacion_completa.sql`
+   completo — exit code 0. Verificado: 27 tablas, instrumento completo
+   (118 reactivos, 145 umbrales, etc.), datos operativos de las Pasadas
+   10-11 (3 cuentas, 2 centros... — los mismos conteos que en la sección
+   19.5, por ser el mismo archivo de respaldo). Login real de `superadmin`
+   probado con `curl`: funciona, redirige a `/superusuario`.
+
+**Pérdida de datos esta vez (a diferencia de la sección 19, que fue cero
+pérdida):** los datos de prueba generados en la auditoría de esta misma
+pasada (administrador `auditoria12`, "Centro Auditoria GRIII", su token y
+la aplicación `SP-AUDIT12` con resultado calculado) se perdieron — se
+habían creado DESPUÉS de la última exportación de
+`instalacion_completa.sql`, así que no estaban capturados ahí. Se avisó al
+usuario con anticipación de este riesgo antes de reimportar. No representa
+ninguna pérdida real: era información de verificación (sección 20.2), ya
+documentada en esta bitácora con sus resultados, no un entregable del
+proyecto.
+
+**Nota para el futuro:** si este patrón se repite una tercera vez, vale la
+pena considerar un cambio de fondo — por ejemplo, detener MySQL
+explícitamente al final de cada sesión de trabajo (en vez de dejar que la
+máquina se suspenda con el proceso activo), o investigar si hay una
+configuración de MariaDB para Windows que tolere mejor una suspensión del
+sistema operativo sin tratarlo como un apagado sucio.
+
+---
+
+## 21. Pasada 13 — tableros de administrador y súper usuario con datos reales (2026-10-08)
+
+Prompt recibido: los tableros de administrador y súper usuario "no se
+entienden a la perfección", necesitan ser más intuitivos y su diseño debe
+ser excepcional — primer paso del trabajo visual, ahora que la esencia
+funcional quedó confirmada sólida (Pasada 12) y el merge de la identidad
+Edomex ya está en `main` (sección 20).
+
+### 21.1 El problema real (no sólo estético)
+
+`administrador/indexView.php` y `superusuario/indexView.php` seguían
+siendo exactamente las tarjetas vacías de la Pasada 1: títulos y un botón,
+sin ningún dato real ni explicación de qué hacer primero. Para alguien sin
+contexto del proyecto (el caso que describió el usuario), un tablero así no
+comunica nada — no hay forma de saber, de un vistazo, cuántos centros de
+trabajo hay, si hay tokens vigentes, o cuántas personas ya respondieron.
+
+### 21.2 Cambios
+
+- **`administradorController::index()`**: ahora calcula, antes de
+  renderizar, el total de centros de trabajo del administrador, cuántos
+  tokens están `activo` Y vigentes entre todos ellos (reutilizando
+  `fecha_inicio`/`fecha_fin` que `tokenModel::por_centro_trabajo()` ya trae
+  — sin una consulta extra por token), y el total de aplicaciones
+  respondidas. Sigue sin registrar auditoría en cada carga del tablero
+  (mismo criterio ya documentado que `superusuarioController::index()`).
+- **`superusuarioController::index()`**: cuenta administradores
+  activos/inactivos de la secretaría (con el mismo degradado defensivo que
+  `administradores()` si `usuario.estado` no existe todavía) y trae las 5
+  entradas más recientes de `auditoriaModel::por_secretaria()` (ya viene
+  ordenada por `id DESC`, sólo se le aplica `array_slice(..., 0, 5)`).
+- **Las dos vistas, reescritas por completo:** encabezado de bienvenida
+  con el nombre real de la sesión (`get_user('username')` — nota: esa
+  función regresa `false`, no `null`, si no encuentra el dato, así que el
+  respaldo usa `?:` y no `??`), 3 tarjetas de resumen en números con
+  íconos, una guía de "¿Cómo funciona?" en 4 pasos (pensada específicamente
+  para quien no tiene claro el flujo completo — alta → token → compartir →
+  resultado para administrador; alta → delega → supervisa → revoca para
+  súper usuario), tarjetas de acceso principal más claras (ícono +
+  descripción + botón, no sólo un botón suelto), y en el tablero del súper
+  usuario además una tabla de "Actividad reciente" (las 5 últimas acciones
+  de la bitácora) para no obligar a entrar a "Bitácora" sólo para ver qué
+  pasó últimamente.
+- **`assets/css/institucional.css`**: se agregó `.icon-circle` (contenedor
+  circular de 48px para los íconos de Font Awesome usados en ambos
+  tableros) — única clase nueva que hizo falta, todo lo demás reutiliza la
+  paleta institucional (`bg-guinda-50`, `text-guinda`, `bg-arena`,
+  `text-cafe`) y las clases de `card-header-institucional` que ya existían
+  del merge de Keren.
+
+Verificado en vivo con `curl`: login real de `superadmin` → tablero
+muestra 1 administrador activo, 0 inactivos, 5 acciones recientes de la
+bitácora; login real de `admintest1` → tablero muestra 1 centro de
+trabajo, 1 token activo, 1 aplicación respondida — todo coincide con los
+datos reales de la base (restaurada en la sección 20.5). Sin errores de
+PHP ni advertencias en ninguna de las dos páginas.

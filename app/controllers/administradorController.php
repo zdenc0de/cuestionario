@@ -43,13 +43,39 @@ class administradorController extends Controller implements ControllerInterface
   }
 
   /**
-   * Tablero principal del administrador
+   * Tablero principal del administrador — resumen real (no sólo enlaces):
+   * cuántos centros de trabajo tiene, cuántos tokens activos y vigentes
+   * existen entre todos ellos, y cuántas aplicaciones ya se respondieron.
+   * Se calcula aquí (no en la vista) para no repetir la lógica de vigencia
+   * de un token en dos lugares — mismo criterio que
+   * tokenModel::esta_vigente(), pero sin una consulta extra por token ya
+   * que `tokenModel::por_centro_trabajo()` ya trae `fecha_inicio`/`fecha_fin`.
+   *
+   * TODO: registrar_auditoria() de la consulta (RF-12) — se deja fuera a
+   * propósito para no llenar la bitácora en cada carga del tablero (mismo
+   * criterio que superusuarioController::index(), ver docs/ARQUITECTURA.md).
    */
   function index()
   {
-    // TODO: registrar_auditoria() de la consulta (RF-12) — se deja fuera a
-    // propósito para no llenar la bitácora en cada carga del tablero (mismo
-    // criterio que superusuarioController::index(), ver docs/ARQUITECTURA.md).
+    $usuarioActual = obtener_usuario_actual();
+    $centros       = centroTrabajoModel::por_administrador($usuarioActual['id']);
+
+    $tokensActivos      = 0;
+    $totalAplicaciones  = 0;
+    $hoy                = date('Y-m-d');
+
+    foreach ($centros as $centro) {
+      foreach (tokenModel::por_centro_trabajo($centro['id']) as $token) {
+        if ($token['estado'] === 'activo' && $hoy >= $token['fecha_inicio'] && $hoy <= $token['fecha_fin']) {
+          $tokensActivos++;
+        }
+      }
+      $totalAplicaciones += count(aplicacionModel::por_centro_trabajo($centro['id']));
+    }
+
+    $this->addToData('total_centros', count($centros));
+    $this->addToData('tokens_activos', $tokensActivos);
+    $this->addToData('total_aplicaciones', $totalAplicaciones);
 
     $this->setTitle('Panel del administrador');
     $this->setView('index'); // templates/views/administrador/indexView.php

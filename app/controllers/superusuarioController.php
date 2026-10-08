@@ -41,14 +41,36 @@ class superusuarioController extends Controller implements ControllerInterface
   }
 
   /**
-   * Tablero principal del súper usuario
+   * Tablero principal del súper usuario — resumen real (administradores
+   * activos/inactivos de la secretaría) + las 5 acciones más recientes de
+   * la bitácora, para no obligar a entrar a "Bitácora" sólo para ver qué
+   * pasó últimamente. Mismo degradado defensivo que administradores() si
+   * la columna `usuario.estado` todavía no existe (ver sección 14.1 de
+   * docs/BITACORA_CAMBIOS.md).
+   *
+   * TODO: registrar_auditoria() de la consulta (RF-12) — se dejó fuera a
+   * propósito para no llenar la bitácora con una entrada en cada carga
+   * del tablero; sí se registra en las acciones que mutan datos (alta/baja
+   * de administradores, ver post_administradores()/borrar_administrador()).
    */
   function index()
   {
-    // TODO: registrar_auditoria() de la consulta (RF-12) — se dejó fuera a
-    // propósito para no llenar la bitácora con una entrada en cada carga
-    // del tablero; sí se registra en las acciones que mutan datos (alta/baja
-    // de administradores, ver post_administradores()/borrar_administrador()).
+    $usuarioActual = obtener_usuario_actual();
+
+    try {
+      $activos   = count(usuarioModel::administradores_por_secretaria($usuarioActual['secretaria_id'], 'activo'));
+      $inactivos = count(usuarioModel::administradores_por_secretaria($usuarioActual['secretaria_id'], 'inactivo'));
+    } catch (Exception $e) {
+      // Columna `usuario.estado` pendiente (scripts/alter_usuario_estado.sql)
+      $activos   = count(usuarioModel::administradores_por_secretaria($usuarioActual['secretaria_id']));
+      $inactivos = 0;
+    }
+
+    $recientes = array_slice(auditoriaModel::por_secretaria($usuarioActual['secretaria_id']), 0, 5);
+
+    $this->addToData('administradores_activos', $activos);
+    $this->addToData('administradores_inactivos', $inactivos);
+    $this->addToData('bitacora_reciente', $recientes);
 
     $this->setTitle('Panel del súper usuario');
     $this->setView('index'); // templates/views/superusuario/indexView.php
