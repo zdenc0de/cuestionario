@@ -170,3 +170,80 @@
 .sidebar.bg-guinda #sidebarToggle:hover {
   background-color: rgba(255, 255, 255, 0.3);
 }
+
+/* Sobrescribir botones success para usar guinda (Bootstrap 4) */
+.btn-success {
+  background-color: var(--edomex-guinda) !important;
+  border-color: var(--edomex-guinda) !important;
+  color: #fff !important;
+}
+.btn-success:hover,
+.btn-success:focus,
+.btn-success:active,
+.btn-success:not(:disabled):not(.disabled):active {
+  background-color: var(--edomex-guinda-dark) !important;
+  border-color: var(--edomex-guinda-dark) !important;
+  color: #fff !important;
+}
+.btn-success:disabled,
+.btn-success.disabled {
+  background-color: var(--edomex-guinda-light) !important;
+  border-color: var(--edomex-guinda-light) !important;
+}
+
+/* Outline success */
+.btn-outline-success {
+  color: var(--edomex-guinda) !important;
+  border-color: var(--edomex-guinda) !important;
+}
+.btn-outline-success:hover,
+.btn-outline-success:focus {
+  background-color: var(--edomex-guinda) !important;
+  border-color: var(--edomex-guinda) !important;
+  color: #fff !important;
+}
+
+/* Badge success */
+.badge-success {
+  background-color: var(--edomex-guinda) !important;
+}
+
+/* Text success */
+.text-success {
+  color: var(--edomex-guinda) !important;
+}
+
+/* ============================================================
+   Tipografía institucional — Montserrat
+   ============================================================ */
+
+/* Fuente base para todo el panel admin */
+body,
+.sidebar,
+.topbar,
+.card,
+.btn,
+.form-control,
+.table,
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6 {
+  font-family: 'Montserrat', 'Gotham', sans-serif !important;
+}
+
+/* Mantener pesos visuales correctos */
+h1, .h1, h2, .h2, h3, .h3, h4, .h4 {
+  font-weight: 600;
+}
+h5, .h5, h6, .h6 {
+  font-weight: 600;
+}
+body {
+  font-weight: 400;
+}
+.btn {
+  font-weight: 500;
+}
+.sidebar .nav-link span,
+.sidebar-heading {
+  font-weight: 500;
+}

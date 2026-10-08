@@ -1079,6 +1079,10 @@ body {
   margin-top: auto !important;
 }
 
+.ml-1 {
+  margin-left: 0.25rem !important;
+}
+
 .block {
   display: block !important;
 }
