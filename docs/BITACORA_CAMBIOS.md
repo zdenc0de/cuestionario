@@ -1724,3 +1724,94 @@ unos días antes (a petición del usuario, para llevarlo al servidor de
 pruebas) resultó ser, sin buscarlo, la red de seguridad que hizo posible
 una recuperación completa y verificada en vez de una reconstrucción manual
 desde ceros.
+
+---
+
+## 20. Pasada 12 — auditoría funcional completa + evaluación del merge de `keren-frontend-bootstrap` (2026-10-08)
+
+Prompt recibido: "análisis completo... funcional, sin errores" antes de
+retomar el trabajo visual, y además integrar a `main` el trabajo visual de
+Keren (rama `keren-frontend-bootstrap`) sin desperdiciarlo.
+
+### 20.1 Hallazgo inicial: trabajo visual sin fusionar
+
+Al revisar el repositorio se encontró que 3 commits de Keren
+(`397a654`, `4dea609`, `9ed948e` — identidad institucional Edomex en
+`bitacoraView.php`, `tokensView.php`, `centrosTrabajoView.php`) existían
+**sólo** en la rama `keren-frontend-bootstrap` (local y remota), nunca
+fusionados a `main`. El código que corre hoy en `main` únicamente tenía el
+primer commit de Keren (`0b5251b`, colores institucionales en
+sidebar/topbar/header/`administradoresView.php`, sí fusionado vía PR #2).
+Esto se confirmó con `git merge-base --is-ancestor` y `git branch --all
+--contains`, no por suposición.
+
+### 20.2 Auditoría funcional de `main` (sin el trabajo de Keren sin fusionar)
+
+Con `git diff` completo contra la última auditoría (commit `e516825`,
+Pasada 11) se confirmó que **nada en `app/` (controladores, modelos,
+funciones) cambió** desde entonces — los únicos archivos tocados fueron
+`app/config/bee_config.php` (credenciales del servidor de pruebas, ver
+sección 18) y los archivos visuales ya mencionados. Se repasó
+`umbralModel.php` línea por línea (el único modelo que no se había releído
+completo en pasadas anteriores) — correcto, sin cambios necesarios.
+
+Se eliminó `templates/views/superusuario/administradoresView.php.backup`
+(107 líneas, archivo de respaldo accidentalmente comiteado por el commit
+`0b5251b`, no referenciado en ningún lado del código).
+
+**Recorrido end-to-end completo, en vivo, con datos nuevos** (no se
+reutilizó nada de pruebas anteriores): súper usuario (`superadmin`) crea un
+administrador real (`auditoria12`) → ese administrador inicia sesión → crea
+un centro de trabajo GRIII (80 trabajadores, "Centro Auditoria GRIII") →
+genera un token → un encuestado responde las 72 preguntas → resultado
+calculado automáticamente (**calificación 139, nivel "alto"** — verificado
+a mano contra el umbral de GRIII: alto es 99–139, muy_alto desde 140, así
+que 139 cae exactamente en el límite correcto) → el administrador ve el
+resultado desde `administrador/tokens/9` → `resultados/individual/12`.
+Bitácora confirmada con las 4 acciones sensibles registradas. Guards de rol
+re-verificados: un administrador pidiendo `/superusuario` y un súper
+usuario pidiendo `/administrador/centros_trabajo` rebotan correctamente a
+su propio tablero. Doble respuesta (mismo token + mismo número de servidor
+público) bloqueada correctamente.
+
+**Incidente de infraestructura durante la prueba (no relacionado con el
+código, mismo patrón que la sección 19 y el de la Pasada 7):** el `INSERT
+INTO bee_users` de la alta del administrador de prueba se quedó trabado 138
+segundos (`SHOW ENGINE INNODB STATUS` mostró la transacción "ACTIVE ...
+inserting" sin ningún lock de fila — no era contención real, el mismo tipo
+de estancamiento ya visto antes). `KILL <id>` no liberó el hilo (quedó en
+estado "Killed" pero sin terminar); un reinicio limpio de MySQL desde el
+panel de XAMPP sí lo resolvió, sin dejar datos huérfanos (confirmado con
+`SELECT COUNT(*)` antes/después).
+
+### 20.3 Evaluación del merge de `keren-frontend-bootstrap` → `main`
+
+Antes de recomendar el merge se verificó, sin ejecutar el merge real
+(Claude no corre comandos de Git — ver sección 15):
+
+- **Cero archivos en conflicto potencial:** `git diff --name-only` desde el
+  ancestro común (`0b5251b`) muestra que `main` y `keren-frontend-bootstrap`
+  tocaron conjuntos de archivos completamente disjuntos (el único archivo
+  compartido, `administradoresView.php.backup`, se borró en `main` y nunca
+  se tocó en la otra rama — un merge normal resuelve eso sin conflicto,
+  tomando el borrado).
+- **Simulación de merge sin tocar el repositorio** (`git merge-tree`, de
+  sólo lectura): cero marcadores de conflicto (`<<<<<<<`).
+- **Revisión de contenido de los 3 archivos de vista** (no sólo el diff,
+  el archivo completo tal como quedaría después del merge): Keren preservó
+  con cuidado TODA la lógica funcional — mismos nombres de campo
+  (`nombre`, `num_trabajadores`, `centro_trabajo_id`, `fecha_inicio`,
+  `fecha_fin`), mismo patrón de acceso `->` a los datos (`$d->centros`,
+  `$d->tokens`, `$d->aplicaciones`, `$d->bitacora` — todos stdClass, no
+  arreglos, ver sección 17.3), mismo `insert_inputs()` (CSRF), mismo patrón
+  GET+CSRF para revocar token/administrador, y **conservó íntegra la
+  sección "Aplicaciones respondidas"** que cierra el lazo visual hacia
+  `resultados/individual()` (Pasada 10) — incluido el comentario original.
+  No es un rediseño descuidado: es un reestilizado fiel a la lógica
+  existente.
+- **`php -l`** en los 3 archivos tal como viven en la rama de Keren: sin
+  errores de sintaxis.
+
+**Recomendación entregada al usuario: proceder con el merge** — comandos
+de Git redactados como texto para que el usuario los corra él mismo
+(mismo patrón de todo el proyecto: Claude nunca ejecuta Git).
