@@ -29,7 +29,7 @@
   <?php echo get_css_framework(); ?>
 
   <!-- Font awesome 6 -->
-  <?php echo get_fontawesome(); ?>
+  <link rel="stylesheet" href="<?php echo URL; ?>assets/fonts/fontawesome/css/all.min.css">
 
   <!-- Toastr css -->
   <?php echo get_toastr('styles'); ?>

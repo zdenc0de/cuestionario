@@ -247,3 +247,87 @@ body {
 .sidebar-heading {
   font-weight: 500;
 }
+
+/* ============================================================
+   Niveles de riesgo — semáforo informativo
+   (De menor a mayor gravedad: nulo → bajo → medio → alto → muy alto)
+   ============================================================ */
+
+.badge-riesgo-nulo {
+  background-color: #00A86B !important;
+  color: #fff;
+}
+
+.badge-riesgo-bajo {
+  background-color: #3B82F6 !important;
+  color: #fff;
+}
+
+.badge-riesgo-medio {
+  background-color: #F59E0B !important;
+  color: #212529;
+}
+
+.badge-riesgo-alto {
+  background-color: #F97316 !important;
+  color: #fff;
+}
+
+.badge-riesgo-muyalto {
+  background-color: #DC2626 !important;
+  color: #fff;
+}
+
+/* Tamaño de badge grande (para la calificación final) */
+.badge-lg {
+  font-size: 0.95rem;
+  padding: 0.6rem 1rem !important;
+  font-weight: 600;
+}
+
+/* Sidebar brand con texto institucional */
+.sidebar.bg-guinda .sidebar-brand {
+  height: auto;
+  padding: 1.5rem 1rem;
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.sidebar.bg-guinda .sidebar-brand span {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+/* ============================================================
+   Alineación del sidebar con el topbar
+   ============================================================ */
+
+/* Fondo blanco para el brand del sidebar */
+.sidebar.bg-guinda .sidebar-brand {
+  height: 4.375rem !important;       /* Misma altura que el topbar */
+  padding: 0.5rem 1rem !important;
+  background-color: #ffffff !important; /* Fondo blanco */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* El logo dentro del brand ocupa el espacio disponible */
+.sidebar.bg-guinda .sidebar-brand img {
+  max-height: 55px;                  /* Que no ocupe toda la altura */
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  display: block;
+}
+
+/* Eliminar cualquier filtro previo (por si acaso) */
+.sidebar.bg-guinda .sidebar-brand img {
+  filter: none;
+}
+
+/* Asegurar la altura del topbar */
+.topbar {
+  height: 4.375rem !important;
+  min-height: 4.375rem !important;
+}

@@ -10,10 +10,12 @@ $rolSidebar = obtener_rol_usuario_actual();
 <!-- Sidebar -->
 <ul class="navbar-nav bg-guinda sidebar sidebar-dark accordion" id="accordionSidebar">
 
-  <!-- Sidebar - Brand -->
-  <a class="sidebar-brand d-flex align-items-center justify-content-center" href="<?php echo get_base_url() . ($rolSidebar !== null ? ruta_tablero_segun_rol() : ''); ?>">
-    <img src="<?php echo get_bee_logo(); ?>" alt="<?php echo get_bee_name(); ?>" width="100px">
-  </a>
+  <!-- Sidebar - Brand (solo texto, el logo va en el topbar) -->
+<a class="sidebar-brand d-flex align-items-center justify-content-center" href="<?php echo get_base_url() . ($rolSidebar !== null ? ruta_tablero_segun_rol() : ''); ?>">
+  <img src="<?php echo URL; ?>assets/images/escudoEdomex.svg" 
+     alt="Estado de México" 
+     style="max-width: 100%; height: auto;">
+</a>
 
   <!-- Divider -->
   <hr class="sidebar-divider my-0">

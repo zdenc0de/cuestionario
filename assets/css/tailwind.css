@@ -1083,6 +1083,10 @@ body {
   margin-left: 0.25rem !important;
 }
 
+.mr-4 {
+  margin-right: 1rem !important;
+}
+
 .block {
   display: block !important;
 }
@@ -2093,6 +2097,11 @@ body {
 
 .blur {
   --tw-blur: blur(8px) !important;
+  filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow) !important;
+}
+
+.invert {
+  --tw-invert: invert(100%) !important;
   filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow) !important;
 }
 
